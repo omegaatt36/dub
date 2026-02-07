@@ -1,0 +1,30 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <g transform="translate(256, 256)">
+    <!-- Bottom Layer -->
+    <rect x="-160" y="-160" width="320" height="320" rx="90" transform="translate(0, 64) rotate(45)" fill="#1e40af" />
+    <!-- Middle Layer -->
+    <rect x="-160" y="-160" width="320" height="320" rx="90" transform="translate(0, 32) rotate(45)" fill="#3b82f6" />
+    
+    <!-- Top Layer (Body) -->
+    <rect x="-160" y="-160" width="320" height="320" rx="90" transform="rotate(45)" fill="#60a5fa" />
+    
+    <!-- Face Group (Rotated -45 to align with top-left edge) -->
+    <!-- translate(0, -110) moves it to the top-left area after rotation -->
+    <g transform="rotate(-45) translate(0, -110)">
+      <!-- Ears -->
+      <circle cx="-80" cy="-50" r="36" fill="#60a5fa" />
+      <circle cx="80" cy="-50" r="36" fill="#60a5fa" />
+      
+      <!-- Eyes -->
+      <g transform="translate(0, 30)">
+        <!-- Left Eye -->
+        <circle cx="-50" cy="0" r="32" fill="white" />
+        <circle cx="-42" cy="0" r="14" fill="#1e40af" />
+        
+        <!-- Right Eye -->
+        <circle cx="50" cy="0" r="32" fill="white" />
+        <circle cx="58" cy="0" r="14" fill="#1e40af" />
+      </g>
+    </g>
+  </g>
+</svg>

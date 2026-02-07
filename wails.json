@@ -1,0 +1,19 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Dub",
+  "outputfilename": "dub",
+  "frontend:dir": "frontend",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "frontend:dev:serverUrl": "",
+  "author": {
+    "name": "raiven_kao"
+  },
+  "info": {
+    "productName": "Dub",
+    "productVersion": "0.1.0",
+    "description": "Batch File Renamer"
+  },
+  "wailsjsdir": "frontend/dist"
+}

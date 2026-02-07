@@ -1,0 +1,197 @@
+package template
+
+import (
+	"fmt"
+	"github.com/omegaatt36/dub/internal/domain"
+)
+
+templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl string) {
+	<div id="names-editor" class="bg-gray-800 rounded-lg border border-gray-700 flex flex-col h-full shadow-sm">
+		<div class="px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0">
+			<h3 class="text-sm font-semibold text-gray-200">New Names</h3>
+		</div>
+		<div class="p-4 flex flex-col h-full overflow-hidden">
+			<!-- Naming method tabs (Segmented Control) -->
+			<div class="flex p-1 mb-4 bg-gray-900/80 rounded-lg border border-gray-700/50">
+				<button
+					type="button"
+					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
+						templ.KV("bg-gray-700 text-white shadow-sm ring-1 ring-white/10", method == "manual"),
+						templ.KV("text-gray-400 hover:text-gray-200 hover:bg-white/5", method != "manual") }
+					hx-post="/api/names"
+					hx-vals='{"method": "manual"}'
+					hx-target="#names-editor"
+					hx-swap="outerHTML"
+				>
+					Manual
+				</button>
+				<button
+					type="button"
+					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
+						templ.KV("bg-gray-700 text-white shadow-sm ring-1 ring-white/10", method == "file"),
+						templ.KV("text-gray-400 hover:text-gray-200 hover:bg-white/5", method != "file") }
+					hx-post="/api/names"
+					hx-vals='{"method": "file"}'
+					hx-target="#names-editor"
+					hx-swap="outerHTML"
+				>
+					From File
+				</button>
+				<button
+					type="button"
+					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
+						templ.KV("bg-gray-700 text-white shadow-sm ring-1 ring-white/10", method == "template"),
+						templ.KV("text-gray-400 hover:text-gray-200 hover:bg-white/5", method != "template") }
+					hx-post="/api/names"
+					hx-vals='{"method": "template"}'
+					hx-target="#names-editor"
+					hx-swap="outerHTML"
+				>
+					Template
+				</button>
+			</div>
+
+			<div class="flex-1 overflow-y-auto min-h-0 relative">
+				if len(files) == 0 {
+					<div class="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
+						<p>Select a directory first.</p>
+					</div>
+				} else {
+					switch method {
+						case "manual":
+							@ManualEditor(files, names)
+						case "file":
+							@FileEditor(names)
+						case "template":
+							@TemplateEditor(tmpl, len(files), names)
+					}
+				}
+			</div>
+		</div>
+	</div>
+}
+
+templ ManualEditor(files []domain.FileItem, names []string) {
+	<form
+		id="manual-names-form"
+		hx-post="/api/names"
+		hx-trigger="auto-save"
+		hx-vals='{"method": "manual", "action": "update"}'
+		hx-target="#main-content"
+		hx-swap="innerHTML"
+		class="h-full flex flex-col"
+	>
+		<div class="space-y-1 pr-1 pb-2">
+			for i, f := range files {
+				<div class="flex items-center gap-2 group">
+					<span class="text-xs text-gray-500 w-6 text-right shrink-0 font-mono group-hover:text-gray-400 transition-colors">{ fmt.Sprintf("%d", i+1) }</span>
+					<input
+						type="text"
+						name={ fmt.Sprintf("name_%d", i) }
+						value={ getName(names, i) }
+						placeholder={ f.Name }
+						spellcheck="false"
+						autocomplete="off"
+						class="flex-1 bg-gray-900/50 border border-gray-700 text-gray-200 rounded px-2.5 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:bg-gray-900 transition-colors placeholder-gray-600"
+					/>
+				</div>
+			}
+		</div>
+		<p class="text-xs text-gray-500 mt-2 text-center pt-2 border-t border-gray-700/50">Auto-saves on pause</p>
+	</form>
+}
+
+templ FileEditor(names []string) {
+	<div class="h-full flex flex-col">
+		<div class="bg-gray-900/50 border-2 border-dashed border-gray-700 rounded-lg p-6 text-center hover:border-blue-500/50 hover:bg-gray-900 transition-all cursor-pointer relative group mb-4">
+			<input
+				type="file"
+				name="namesfile"
+				accept=".txt,.csv"
+				class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+				hx-post="/api/names/upload"
+				hx-encoding="multipart/form-data"
+				hx-target="#main-content"
+				hx-swap="innerHTML"
+				title=""
+			/>
+			<div class="space-y-2 pointer-events-none">
+				<svg class="mx-auto h-8 w-8 text-gray-500 group-hover:text-blue-400 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+					<path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+				</svg>
+				<div class="text-sm text-gray-400">
+					<span class="font-medium text-blue-400 group-hover:text-blue-300">Click to upload</span> or drag and drop
+				</div>
+				<p class="text-xs text-gray-500">.txt or .csv (one name per line)</p>
+			</div>
+		</div>
+		if len(names) > 0 {
+			<div class="flex-1 min-h-0 flex flex-col">
+				<h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
+				<div class="bg-gray-900 rounded border border-gray-700 p-2 flex-1 overflow-y-auto">
+					@NamesList(names)
+				</div>
+			</div>
+		}
+	</div>
+}
+
+templ TemplateEditor(tmpl string, fileCount int, names []string) {
+	<div class="h-full flex flex-col">
+		<label class="block text-sm font-medium text-gray-300 mb-2">
+			Pattern
+		</label>
+		<div class="flex gap-2 mb-2">
+			<input
+				type="text"
+				name="template"
+				value={ tmpl }
+				placeholder="name_{index}"
+				class="flex-1 bg-gray-900 border border-gray-600 text-gray-100 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+			/>
+			<button
+				type="button"
+				class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+				hx-post="/api/names/generate"
+				hx-include="[name='template']"
+				hx-target="#main-content"
+				hx-swap="innerHTML"
+			>
+				Generate
+			</button>
+		</div>
+		
+		<div class="flex gap-2 mb-4 text-xs">
+			<span class="text-gray-500">Variables:</span>
+			<code class="bg-gray-700/50 border border-gray-600/50 text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{index}'">{ "{index}" }</code>
+			<code class="bg-gray-700/50 border border-gray-600/50 text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{original}'">{ "{original}" }</code>
+		</div>
+
+		if len(names) > 0 {
+			<div class="flex-1 min-h-0 flex flex-col">
+				<h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
+				<div class="bg-gray-900 rounded border border-gray-700 p-2 flex-1 overflow-y-auto">
+					@NamesList(names)
+				</div>
+			</div>
+		}
+	</div>
+}
+
+templ NamesList(names []string) {
+	<div class="space-y-0.5">
+		for i, name := range names {
+			<div class="flex items-center gap-2 text-sm py-0.5 px-1 hover:bg-gray-800 rounded">
+				<span class="text-xs text-gray-600 w-6 text-right shrink-0 font-mono">{ fmt.Sprintf("%d", i+1) }</span>
+				<span class="text-gray-300 truncate">{ name }</span>
+			</div>
+		}
+	</div>
+}
+
+func getName(names []string, index int) string {
+	if index < len(names) {
+		return names[index]
+	}
+	return ""
+}

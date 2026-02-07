@@ -1,0 +1,106 @@
+package template
+
+import (
+	"fmt"
+	"github.com/omegaatt36/dub/internal/domain"
+)
+
+templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPattern bool) {
+	<div id="file-list" class="bg-gray-800 rounded-lg border border-gray-700 flex flex-col h-full overflow-hidden shadow-sm">
+		<div class="px-4 py-3 bg-gray-800 border-b border-gray-700 shrink-0 flex justify-between items-center">
+			<h3 class="text-sm font-semibold text-gray-200 tracking-wide">
+				if hasPattern {
+					Matched Files
+				} else {
+					Files
+				}
+				<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-700 text-gray-400 font-medium">{ fmt.Sprintf("%d", len(files)) }</span>
+			</h3>
+		</div>
+		<div class="flex-1 overflow-auto relative">
+			if len(files) == 0 {
+				<div class="flex flex-col items-center justify-center h-full text-gray-500 p-8">
+					<svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+					if hasPattern {
+						<p class="text-sm">No files match the current pattern.</p>
+					} else {
+						<p class="text-sm">No files to display. Select a directory to begin.</p>
+					}
+				</div>
+			} else if len(previews) > 0 {
+				<table class="w-full text-sm text-left border-collapse">
+					<thead class="sticky top-0 z-10 bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-300 uppercase tracking-wider">
+						<tr>
+							<th class="px-4 py-3 border-b border-gray-700">Original</th>
+							<th class="px-2 py-3 border-b border-gray-700 w-8"></th>
+							<th class="px-4 py-3 border-b border-gray-700">New Name</th>
+							<th class="px-4 py-3 border-b border-gray-700 text-right w-24">Size</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-700/50">
+						for i, p := range previews {
+							<tr class={ "group transition-colors duration-150 hover:bg-gray-700/50", 
+								templ.KV("bg-red-900/10 hover:bg-red-900/20", p.Conflict),
+								templ.KV("bg-gray-800", !p.Conflict && i % 2 == 0),
+								templ.KV("bg-gray-800/50", !p.Conflict && i % 2 != 0) }>
+								<td class="px-4 py-2.5 max-w-xs truncate text-gray-300 group-hover:text-gray-100">
+									<div class="flex items-center gap-2.5">
+										@FileIcon(domain.FileTypeIcon(files[i].Extension))
+										<span class="truncate" title={ p.OriginalName }>{ p.OriginalName }</span>
+									</div>
+								</td>
+								<td class="px-2 py-2.5 text-center">
+									if p.Conflict {
+										<div class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-500/20 text-red-400" title="Conflict">
+											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+										</div>
+									} else if p.OriginalName != p.NewName {
+										<span class="text-gray-500 group-hover:text-blue-400 transition-colors">➝</span>
+									}
+								</td>
+								<td class="px-4 py-2.5 max-w-xs truncate">
+									if p.Conflict {
+										<span class="text-red-400 font-medium" title="Conflict">{ p.NewName }</span>
+									} else if p.OriginalName != p.NewName {
+										<span class="text-emerald-400 font-medium">{ p.NewName }</span>
+									} else {
+										<span class="text-gray-500">{ p.NewName }</span>
+									}
+								</td>
+								<td class="px-4 py-2.5 text-right text-gray-500 text-xs font-mono">
+									@FormatSize(files[i].Size)
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			} else {
+				<table class="w-full text-sm text-left border-collapse">
+					<thead class="sticky top-0 z-10 bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-300 uppercase tracking-wider">
+						<tr>
+							<th class="px-4 py-3 border-b border-gray-700">Name</th>
+							<th class="px-4 py-3 border-b border-gray-700 w-24">Ext</th>
+							<th class="px-4 py-3 border-b border-gray-700 text-right w-24">Size</th>
+						</tr>
+					</thead>
+					<tbody class="divide-y divide-gray-700/50">
+						for _, f := range files {
+							<tr class="transition-colors duration-150 hover:bg-gray-700/50">
+								<td class="px-4 py-2.5 max-w-xs truncate text-gray-300">
+									<div class="flex items-center gap-2.5">
+										@FileIcon(domain.FileTypeIcon(f.Extension))
+										<span class="truncate" title={ f.Name }>{ f.Name }</span>
+									</div>
+								</td>
+								<td class="px-4 py-2.5 text-gray-500 text-xs">{ f.Extension }</td>
+								<td class="px-4 py-2.5 text-right text-gray-500 text-xs font-mono">
+									@FormatSize(f.Size)
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			}
+		</div>
+	</div>
+}

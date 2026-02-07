@@ -1,0 +1,63 @@
+package template
+
+import "github.com/omegaatt36/dub/internal/domain"
+
+type PageData struct {
+	SelectedDirectory string
+	AllFiles          []domain.FileItem
+	MatchedFiles      []domain.FileItem
+	Pattern           string
+	NewNames          []string
+	Previews          []domain.RenamePreview
+	Error             string
+	NamingMethod      string
+	Template          string
+	Result            *domain.RenameResult
+}
+
+// AppContent renders the app UI without the HTML shell.
+// Used by /api/page — index.html provides the <html>/<head>/<body> shell.
+templ AppContent(data PageData) {
+	<div class="h-screen flex flex-col">
+		<!-- Header -->
+		<div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center gap-3">
+			<img src="/static/images/logo.svg" alt="Dub Logo" class="w-10 h-10 hover:scale-110 transition-transform duration-300" />
+			<div>
+				<h1 class="text-lg font-semibold text-gray-100 leading-none tracking-tight">Dub</h1>
+				<p class="text-xs text-gray-400 mt-0.5 font-medium">Batch File Renamer</p>
+			</div>
+		</div>
+		<!-- Main content -->
+		<div id="main-content" class="flex-1 overflow-hidden">
+			@MainContent(data)
+		</div>
+	</div>
+}
+
+templ MainContent(data PageData) {
+	@ErrorBanner(data.Error)
+	<div class="h-full grid grid-cols-2 gap-4 p-4">
+		<!-- Left column: Directory + File List -->
+		<div class="flex flex-col gap-4 min-h-0">
+			@DirectorySelector(data.SelectedDirectory)
+			<div class="flex-1 min-h-0 overflow-auto">
+				@FileList(displayFiles(data), data.Previews, data.Pattern != "")
+			</div>
+		</div>
+		<!-- Right column: Pattern + Editor + Actions -->
+		<div class="flex flex-col gap-4 min-h-0">
+			@PatternInput(data.Pattern, len(data.AllFiles), len(data.MatchedFiles))
+			<div class="flex-1 min-h-0 overflow-auto">
+				@NamesEditor(displayFiles(data), data.NewNames, data.NamingMethod, data.Template)
+			</div>
+			@Actions(len(displayFiles(data)) > 0, len(data.NewNames) > 0, len(data.Previews) > 0, data.Result)
+		</div>
+	</div>
+}
+
+func displayFiles(data PageData) []domain.FileItem {
+	if data.Pattern != "" {
+		return data.MatchedFiles // may be empty = 0 matches, that's correct
+	}
+	return data.AllFiles
+}

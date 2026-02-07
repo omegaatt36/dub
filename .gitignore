@@ -1,0 +1,6 @@
+build/
+test
+
+frontend/dist/
+
+*_templ.go

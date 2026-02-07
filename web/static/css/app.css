@@ -1,0 +1,54 @@
+/* Custom styles for Dub */
+
+/* HTMX loading indicator */
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+/* Conflict highlight */
+.conflict {
+    background-color: rgba(239, 68, 68, 0.15);
+}
+
+/* Preview arrow */
+.preview-arrow {
+    color: #6b7280;
+    margin: 0 0.5rem;
+}
+
+/* Scrollable file list */
+.file-list-container {
+    max-height: calc(100vh - 280px);
+    overflow-y: auto;
+}
+
+/* Direction RTL for path truncation (show end of path) */
+.dir-rtl {
+    direction: rtl;
+    text-align: left;
+    unicode-bidi: plaintext;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.8);
+}
