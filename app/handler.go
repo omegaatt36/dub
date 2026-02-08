@@ -8,27 +8,26 @@ import (
 	"strings"
 
 	"github.com/a-h/templ"
-	"github.com/go-chi/chi/v5"
 
 	"github.com/omegaatt36/dub/internal/domain"
 	"github.com/omegaatt36/dub/web/template"
 )
 
-func (a *App) newRouter() chi.Router {
-	r := chi.NewRouter()
+func (a *App) newRouter() http.Handler {
+	mux := http.NewServeMux()
 
 	// HTMX routes — static files are served by Wails AssetServer directly
-	r.Get("/api/page", a.handlePage)
-	r.Post("/api/select-directory", a.handleSelectDirectory)
-	r.Post("/api/scan", a.handleScan)
-	r.Post("/api/pattern", a.handlePattern)
-	r.Post("/api/names", a.handleNames)
-	r.Post("/api/names/generate", a.handleNamesGenerate)
-	r.Post("/api/names/upload", a.handleNamesUpload)
-	r.Post("/api/preview", a.handlePreview)
-	r.Post("/api/execute", a.handleExecute)
+	mux.HandleFunc("GET /api/page", a.handlePage)
+	mux.HandleFunc("POST /api/select-directory", a.handleSelectDirectory)
+	mux.HandleFunc("POST /api/scan", a.handleScan)
+	mux.HandleFunc("POST /api/pattern", a.handlePattern)
+	mux.HandleFunc("POST /api/names", a.handleNames)
+	mux.HandleFunc("POST /api/names/generate", a.handleNamesGenerate)
+	mux.HandleFunc("POST /api/names/upload", a.handleNamesUpload)
+	mux.HandleFunc("POST /api/preview", a.handlePreview)
+	mux.HandleFunc("POST /api/execute", a.handleExecute)
 
-	return r
+	return mux
 }
 
 // handlePage returns the inner page content (no HTML shell).
