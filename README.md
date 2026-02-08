@@ -26,10 +26,8 @@ A desktop batch file renamer built with Go, designed for fast and intuitive bulk
 | Layer | Technology |
 |-------|-----------|
 | Runtime | [Wails v2](https://wails.io/) — Go + native WebView |
-| Router | [Chi v5](https://github.com/go-chi/chi) — HTTP handler for HTMX endpoints |
 | Templates | [Templ](https://templ.guide/) — type-safe Go HTML templates |
 | Frontend | [HTMX](https://htmx.org/) + [Tailwind CSS](https://tailwindcss.com/) (CDN) |
-| State | Server-side (no client-side framework) |
 
 ## Architecture
 
