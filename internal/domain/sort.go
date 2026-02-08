@@ -16,8 +16,6 @@ func NaturalSort(files []FileItem) {
 	})
 }
 
-// naturalCompare compares two strings using natural sort ordering.
-// Returns -1 if a < b, 1 if a > b, and 0 if a == b.
 func naturalCompare(a, b string) int {
 	aLower := strings.ToLower(a)
 	bLower := strings.ToLower(b)
@@ -55,8 +53,6 @@ func naturalCompare(a, b string) int {
 	return cmp.Compare(len(aLower), len(bLower))
 }
 
-// extractNumber extracts a numeric value starting at position start in s.
-// Returns the numeric value and the end position.
 func extractNumber(s string, start int) (uint64, int) {
 	var num uint64
 	i := start

@@ -1,142 +1,170 @@
 // bridge.js - Wails runtime <-> HTMX bridge
+(() => {
+  "use strict";
 
-(function () {
-    'use strict';
+  // Using WeakMap to store debounce timers for each element to avoid global pollution.
+  // Key: HTMLInputElement | HTMLFormElement, Value: TimerID
+  const timers = new WeakMap();
 
-    var composing = false;
-    var patternTimer = null;
-    var namesTimer = null;
-    var savedInput = null;
+  // Track global IME state (Single focus principle)
+  let isComposing = false;
 
-    // -----------------------------------------------------------------------
-    // 1. IME composition tracking
-    // -----------------------------------------------------------------------
-    document.addEventListener('compositionstart', function () {
-        composing = true;
-    });
+  // Store input state before HTMX Swap
+  let savedInputState = null;
 
-    document.addEventListener('compositionend', function (e) {
-        composing = false;
-        // Trigger debounce after composition commits.
-        // setTimeout(0) ensures the final input event has been processed.
-        setTimeout(function () { handleInput(e.target); }, 0);
-    });
+  // --- IME Composition Handling ---
 
-    // -----------------------------------------------------------------------
-    // 2. IME-aware debounced input → custom HTMX trigger events
-    //    Uses event delegation on document so it survives DOM swaps.
-    // -----------------------------------------------------------------------
-    document.addEventListener('input', function (e) {
-        if (composing) return;
-        handleInput(e.target);
-    });
+  document.addEventListener("compositionstart", () => {
+    isComposing = true;
+  });
 
-    function handleInput(target) {
-        // Filter Pattern input
-        if (target.name === 'pattern') {
-            clearTimeout(patternTimer);
-            patternTimer = setTimeout(function () {
-                var el = document.querySelector('input[name="pattern"]');
-                if (el && !composing) htmx.trigger(el, 'pattern-changed');
-            }, 400);
-            return;
-        }
-        // Manual Names form
-        if (target.closest && target.closest('#manual-names-form')) {
-            clearTimeout(namesTimer);
-            namesTimer = setTimeout(function () {
-                var form = document.getElementById('manual-names-form');
-                if (form && !composing) htmx.trigger(form, 'auto-save');
-            }, 600);
-        }
+  document.addEventListener("compositionend", (e) => {
+    isComposing = false;
+    // Trigger input handling immediately when composition ends
+    handleSmartInput(e.target);
+  });
+
+  // --- Generic Debounced Input Handler ---
+  // Reads behavior from HTML attributes instead of hardcoding names.
+
+  document.addEventListener("input", (e) => {
+    if (isComposing) return;
+    handleSmartInput(e.target);
+  });
+
+  function handleSmartInput(target) {
+    if (!target) return;
+
+    // 1. Single Input Debounce (e.g., Pattern Search)
+    // HTML: <input name="pattern" data-debounce="400" data-event="pattern-changed">
+    if (target.dataset.debounce && target.dataset.event) {
+      scheduleTrigger(
+        target,
+        target,
+        target.dataset.event,
+        parseInt(target.dataset.debounce),
+      );
+      return;
     }
 
-    // -----------------------------------------------------------------------
-    // 3. Swap gate + input value preservation
-    //
-    //    Problem: a swap replaces the DOM, destroying the user's in-progress
-    //    edits in text inputs (value, cursor, IME state).
-    //
-    //    Solution:
-    //    - If composing → block the swap entirely (discard response).
-    //      compositionend will fire a new debounce → fresh response later.
-    //    - If not composing but a text input is focused → allow the swap
-    //      but save the input's current value + cursor, then restore after
-    //      settle so the user doesn't lose keystrokes typed between
-    //      request-sent and response-received.
-    // -----------------------------------------------------------------------
-    document.addEventListener('htmx:beforeSwap', function (evt) {
-        var target = evt.detail.target;
-        if (!target || target.id !== 'main-content') return;
+    // 2. Form Level Debounce (e.g., Manual Names)
+    // Look up for a parent form with data-auto-save
+    const form = target.closest("form[data-auto-save]");
+    if (form) {
+      const delay = parseInt(form.dataset.debounce) || 600;
+      const eventName = form.dataset.event || "auto-save";
+      scheduleTrigger(form, form, eventName, delay);
+    }
+  }
 
-        // Block swap while IME is composing
-        if (composing) {
-            evt.detail.shouldSwap = false;
-            return;
-        }
+  /**
+   * Generic trigger scheduler
+   * @param {HTMLElement} timerKey - The element to bind the timer to (Input or Form)
+   * @param {HTMLElement} triggerTarget - The element that will fire the HTMX event
+   * @param {string} eventName - The event name to trigger
+   * @param {number} delay - Delay in milliseconds
+   */
+  function scheduleTrigger(timerKey, triggerTarget, eventName, delay) {
+    if (timers.has(timerKey)) {
+      clearTimeout(timers.get(timerKey));
+    }
 
-        // Save active text input state before the swap destroys it
-        var el = document.activeElement;
-        if (el && el.tagName === 'INPUT' && el.type === 'text' && el.name) {
-            savedInput = {
-                name: el.name,
-                value: el.value,
-                pos: el.selectionStart,
-            };
-        } else {
-            savedInput = null;
-        }
-    });
+    const timerId = setTimeout(() => {
+      if (!isComposing) {
+        htmx.trigger(triggerTarget, eventName);
+        timers.delete(timerKey);
+      }
+    }, delay);
 
-    document.addEventListener('htmx:afterSettle', function () {
-        if (!savedInput) return;
-        var input = document.querySelector('input[name="' + savedInput.name + '"]');
-        if (!input) { savedInput = null; return; }
+    timers.set(timerKey, timerId);
+  }
 
-        // Restore the user's current value (may differ from server response)
-        input.value = savedInput.value;
-        input.focus();
-        var pos = Math.min(savedInput.pos, input.value.length);
-        input.setSelectionRange(pos, pos);
-        savedInput = null;
-    });
+  // --- Smart Swap Preservation (Restore cursor & value) ---
+
+  document.addEventListener("htmx:beforeSwap", (evt) => {
+    // Block swap during IME composition
+    if (isComposing) {
+      evt.detail.shouldSwap = false;
+      return;
+    }
+
+    const activeEl = document.activeElement;
+    if (
+      activeEl &&
+      (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA") &&
+      ["text", "search", "url", "tel", "email", "password"].includes(
+        activeEl.type,
+      ) &&
+      activeEl.name
+    ) {
+      savedInputState = {
+        name: activeEl.name,
+        value: activeEl.value,
+        selectionStart: activeEl.selectionStart,
+        selectionEnd: activeEl.selectionEnd,
+      };
+    } else {
+      savedInputState = null;
+    }
+  });
+
+  document.addEventListener("htmx:afterSettle", () => {
+    if (!savedInputState) return;
+
+    const input = document.querySelector(`[name="${savedInputState.name}"]`);
+    if (input) {
+      input.value = savedInputState.value;
+      input.focus();
+      try {
+        input.setSelectionRange(
+          savedInputState.selectionStart,
+          savedInputState.selectionEnd,
+        );
+      } catch (e) {
+        // Ignore errors for input types that don't support selectionRange
+      }
+    }
+    savedInputState = null;
+  });
 })();
 
-// ---------------------------------------------------------------------------
-// Directory selection (uses Wails runtime or fallback prompt)
-// ---------------------------------------------------------------------------
-async function selectDirectory() {
-    if (!window.runtime || !window.runtime.OpenDirectoryDialog) {
-        var path = prompt('Enter directory path:');
-        if (!path) return;
-        htmx.ajax('POST', '/api/scan', { values: { path: path }, target: '#main-content' });
-        return;
-    }
+// --- Directory Selection & Helpers ---
+
+window.selectDirectory = async function () {
+  const runtime = window.runtime;
+
+  // Prefer Wails 2 runtime
+  if (runtime && runtime.OpenDirectoryDialog) {
     try {
-        var path = await window.runtime.OpenDirectoryDialog({ title: 'Select Directory' });
-        if (!path) return;
-        htmx.ajax('POST', '/api/scan', { values: { path: path }, target: '#main-content' });
+      const path = await runtime.OpenDirectoryDialog({
+        title: "Select Directory",
+      });
+      if (path) triggerScan(path);
     } catch (err) {
-        console.error('Failed to open directory dialog:', err);
+      console.error("Directory dialog failed:", err);
     }
-}
+  } else {
+    // Fallback for browser testing
+    const path = prompt("Enter directory path (Debug Mode):");
+    if (path) triggerScan(path);
+  }
+};
 
-// ---------------------------------------------------------------------------
-// Pattern shortcut insertion (programmatic, no IME concern)
-// ---------------------------------------------------------------------------
-function appendShortcut(shortcut) {
-    var input = document.querySelector('input[name="pattern"]');
-    if (!input) return;
+window.appendShortcut = function (shortcut) {
+  const input = document.querySelector('input[name="pattern"]');
+  if (!input) return;
 
-    var start = input.selectionStart;
-    var end = input.selectionEnd;
-    var value = input.value;
+  // Use setRangeText for cleaner insertion and cursor management.
+  // 'end' mode places cursor after the inserted text.
+  input.setRangeText(shortcut, input.selectionStart, input.selectionEnd, "end");
 
-    input.value = value.substring(0, start) + shortcut + value.substring(end);
-    input.focus();
+  htmx.trigger(input, "pattern-changed");
+  input.focus();
+};
 
-    var newPos = start + shortcut.length;
-    input.setSelectionRange(newPos, newPos);
-
-    htmx.trigger(input, 'pattern-changed');
+function triggerScan(path) {
+  htmx.ajax("POST", "/api/scan", {
+    values: { path },
+    target: "#main-content",
+  });
 }

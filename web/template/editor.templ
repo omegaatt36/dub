@@ -50,7 +50,6 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 					Template
 				</button>
 			</div>
-
 			<div class="flex-1 overflow-y-auto min-h-0 relative">
 				if len(files) == 0 {
 					<div class="flex flex-col items-center justify-center h-full text-gray-500 text-sm">
@@ -74,6 +73,9 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 templ ManualEditor(files []domain.FileItem, names []string) {
 	<form
 		id="manual-names-form"
+		data-auto-save
+		data-debounce="600"
+		data-event="auto-save"
 		hx-post="/api/names"
 		hx-trigger="auto-save"
 		hx-vals='{"method": "manual", "action": "update"}'
@@ -117,7 +119,7 @@ templ FileEditor(names []string) {
 			/>
 			<div class="space-y-2 pointer-events-none">
 				<svg class="mx-auto h-8 w-8 text-gray-500 group-hover:text-blue-400 transition-colors" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
-					<path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+					<path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path>
 				</svg>
 				<div class="text-sm text-gray-400">
 					<span class="font-medium text-blue-400 group-hover:text-blue-300">Click to upload</span> or drag and drop
@@ -160,13 +162,11 @@ templ TemplateEditor(tmpl string, fileCount int, names []string) {
 				Generate
 			</button>
 		</div>
-		
 		<div class="flex gap-2 mb-4 text-xs">
 			<span class="text-gray-500">Variables:</span>
 			<code class="bg-gray-700/50 border border-gray-600/50 text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{index}'">{ "{index}" }</code>
 			<code class="bg-gray-700/50 border border-gray-600/50 text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{original}'">{ "{original}" }</code>
 		</div>
-
 		if len(names) > 0 {
 			<div class="flex-1 min-h-0 flex flex-col">
 				<h4 class="text-xs font-medium text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
