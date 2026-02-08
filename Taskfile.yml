@@ -1,0 +1,41 @@
+version: '3'
+
+tasks:
+  generate:
+    desc: Generate templ files
+    cmds:
+      - templ generate
+
+  frontend-prep:
+    desc: Prepare frontend assets
+    cmds:
+      - mkdir -p frontend/dist
+      - cp web/index.html frontend/dist/
+      - cp -r web/static frontend/dist/
+
+  dev:
+    desc: Run development server
+    deps: [generate, frontend-prep]
+    cmds:
+      - templ generate -watch & wails dev
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test -v ./internal/... ./app/...
+
+  test-coverage:
+    desc: Run tests with coverage
+    cmds:
+      - go test -cover ./internal/... ./app/...
+
+  build:
+    desc: Build the application
+    deps: [generate, frontend-prep]
+    cmds:
+      - wails build
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf build/ frontend/dist/
