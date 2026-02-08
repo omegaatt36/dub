@@ -79,25 +79,6 @@ Outputs a standalone binary in `build/bin/`.
 ```bash
 # Run all tests
 make test
-
-# Run with coverage
-make test-coverage
-```
-
-### Coverage
-
-| Package | Coverage |
-|---------|----------|
-| `internal/adapter/fs` | 100% |
-| `internal/adapter/regex` | 100% |
-| `internal/domain` | 95.7% |
-| `internal/service` | 96.9% |
-| `app` (handlers + E2E) | 80.5% |
-
-The test suite includes unit tests with function-based mocks (no mock library) and end-to-end integration tests that exercise the full flow against a real filesystem:
-
-```
-Scan directory → Filter by pattern → Upload names → Preview → Execute rename → Verify on disk
 ```
 
 ## How It Works
