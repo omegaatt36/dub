@@ -74,12 +74,27 @@ jobs:
           PKG_CONFIG_LIBDIR: /usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
         run: wails build -platform ${{ matrix.platform }}
 
+      - name: Install create-dmg
+        if: startsWith(matrix.platform, 'darwin')
+        run: brew install create-dmg
+
       - name: Package (macOS dmg)
         if: startsWith(matrix.platform, 'darwin')
         run: |
           ARCH="${{ matrix.platform }}"
           ARCH="${ARCH##*/}"
-          hdiutil create -volname "Dub" -srcfolder build/bin/dub.app -ov -format UDZO "Dub-darwin-${ARCH}.dmg"
+          
+          # Run create-dmg to build the DMG with a drag-to-applications link
+          create-dmg \
+            --volname "Dub" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 100 \
+            --icon "dub.app" 180 170 \
+            --hide-extension "dub.app" \
+            --app-drop-link 480 170 \
+            "Dub-darwin-${ARCH}.dmg" \
+            "build/bin/dub.app"
 
       - name: Package (Linux)
         if: startsWith(matrix.platform, 'linux')
