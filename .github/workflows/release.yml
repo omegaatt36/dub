@@ -18,9 +18,9 @@ jobs:
             platform: darwin/amd64
           - os: macos-latest
             platform: darwin/arm64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             platform: linux/amd64
-          - os: ubuntu-22.04
+          - os: ubuntu-latest
             platform: linux/arm64
 
     runs-on: ${{ matrix.os }}
@@ -39,16 +39,19 @@ jobs:
       - name: Install templ
         run: go install github.com/a-h/templ/cmd/templ@v0.3.977
 
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
       - name: Generate and prepare frontend
         run: |
-          make generate
-          make frontend-prep
+          task generate
+          task frontend-prep
 
       - name: Install Linux dependencies (amd64)
         if: matrix.platform == 'linux/amd64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Setup Linux arm64 cross-compilation
         if: matrix.platform == 'linux/arm64'
@@ -83,7 +86,7 @@ jobs:
         run: |
           ARCH="${{ matrix.platform }}"
           ARCH="${ARCH##*/}"
-          
+
           # Run create-dmg to build the DMG with a drag-to-applications link
           create-dmg \
             --volname "Dub" \

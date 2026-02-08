@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Install Task
+        uses: go-task/setup-task@v1
+
+      - name: Install templ
+        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
+
+      # Wails dependencies are required on Linux to compile/test packages
+      # that might interact with the frontend runtime
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Generate code
+        run: task generate
+
+      - name: Run Tests
+        run: task test
