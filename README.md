@@ -46,10 +46,12 @@ All state is server-side. The frontend is pure HTML rendered by Templ, with HTMX
 ### Prerequisites
 
 - [Go](https://go.dev/) 1.25+
+- [Task](https://taskfile.dev/) (Task runner)
 - [Wails CLI](https://wails.io/docs/gettingstarted/installation) v2
 - [Templ](https://templ.guide/quick-start/installation) CLI
 
 ```bash
+go install github.com/go-task/task/v3/cmd/task@latest
 go install github.com/a-h/templ/cmd/templ@latest
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 ```
@@ -58,7 +60,7 @@ go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 ```bash
 # Generate templ files and start dev server with hot reload
-make dev
+task dev
 ```
 
 This runs `templ generate -watch` and `wails dev` concurrently.
@@ -67,7 +69,7 @@ This runs `templ generate -watch` and `wails dev` concurrently.
 
 ```bash
 # Production build
-make build
+task build
 ```
 
 Outputs a standalone binary in `build/bin/`.
@@ -76,7 +78,7 @@ Outputs a standalone binary in `build/bin/`.
 
 ```bash
 # Run all tests
-make test
+task test
 ```
 
 ## How It Works
