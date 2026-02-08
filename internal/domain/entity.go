@@ -2,29 +2,26 @@ package domain
 
 import "fmt"
 
-// FileItem represents a file in the selected directory.
 type FileItem struct {
-	Name      string `json:"name"`
-	Path      string `json:"path"`
-	Extension string `json:"extension"`
-	Size      uint64 `json:"size"`
+	Name      string
+	Path      string
+	Extension string
+	Size      uint64
 }
 
-// RenamePreview represents a single file rename preview.
 type RenamePreview struct {
-	OriginalName string `json:"originalName"`
-	NewName      string `json:"newName"`
-	OriginalPath string `json:"originalPath"`
-	NewPath      string `json:"newPath"`
-	Conflict     bool   `json:"conflict"`
+	OriginalName string
+	NewName      string
+	OriginalPath string
+	NewPath      string
+	Conflict     bool
 }
 
-// RenameResult represents the outcome of a batch rename operation.
 type RenameResult struct {
-	Success      bool     `json:"success"`
-	Message      string   `json:"message"`
-	RenamedCount int      `json:"renamedCount"`
-	Errors       []string `json:"errors"`
+	Success      bool
+	Message      string
+	RenamedCount int
+	Errors       []string
 }
 
 // FormatFileSize formats a file size in bytes to a human-readable string.
