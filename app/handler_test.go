@@ -10,7 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/omegaatt36/dub/internal/domain"
+	"github.com/omegaatt36/dub/internal/service"
 )
 
 // Test mocks
@@ -33,7 +37,7 @@ type mockFileInfo struct {
 
 func (m *mockFileInfo) Name() string       { return m.name }
 func (m *mockFileInfo) Size() int64        { return m.size }
-func (m *mockFileInfo) Mode() fs.FileMode  { return 0644 }
+func (m *mockFileInfo) Mode() fs.FileMode  { return 0o644 }
 func (m *mockFileInfo) ModTime() time.Time { return time.Time{} }
 func (m *mockFileInfo) IsDir() bool        { return false }
 func (m *mockFileInfo) Sys() any           { return nil }
@@ -94,7 +98,11 @@ func newTestApp() *App {
 		},
 	}
 	mpm := &mockPM{}
-	return NewApp(mfs, mpm)
+	return NewApp(
+		service.NewScannerService(mfs),
+		service.NewPatternService(mpm),
+		service.NewRenamerService(mfs),
+	)
 }
 
 func TestHandlePage(t *testing.T) {
@@ -105,14 +113,8 @@ func TestHandlePage(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	body := rec.Body.String()
-	if !strings.Contains(body, "Dub") {
-		t.Error("response should contain app title")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Dub")
 }
 
 func TestHandleScan(t *testing.T) {
@@ -125,16 +127,9 @@ func TestHandleScan(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	if app.state.SelectedDirectory != "/test/dir" {
-		t.Errorf("got dir %q, want %q", app.state.SelectedDirectory, "/test/dir")
-	}
-	if len(app.state.AllFiles) != 2 {
-		t.Errorf("got %d files, want 2", len(app.state.AllFiles))
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "/test/dir", app.state.SelectedDirectory)
+	assert.Len(t, app.state.AllFiles, 2)
 }
 
 func TestHandleScanEmptyPath(t *testing.T) {
@@ -146,9 +141,7 @@ func TestHandleScanEmptyPath(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if app.state.Error == "" {
-		t.Error("expected error for empty path")
-	}
+	assert.NotEmpty(t, app.state.Error, "expected error for empty path")
 }
 
 func TestHandlePattern(t *testing.T) {
@@ -167,9 +160,7 @@ func TestHandlePattern(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
 func TestHandleNamesGenerate(t *testing.T) {
@@ -188,19 +179,10 @@ func TestHandleNamesGenerate(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	if len(app.state.NewNames) != 2 {
-		t.Fatalf("got %d names, want 2", len(app.state.NewNames))
-	}
-	if app.state.NewNames[0] != "photo_1" {
-		t.Errorf("got name %q, want %q", app.state.NewNames[0], "photo_1")
-	}
-	if app.state.NewNames[1] != "photo_2" {
-		t.Errorf("got name %q, want %q", app.state.NewNames[1], "photo_2")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.NewNames, 2)
+	assert.Equal(t, "photo_1", app.state.NewNames[0])
+	assert.Equal(t, "photo_2", app.state.NewNames[1])
 }
 
 func TestHandlePreview(t *testing.T) {
@@ -218,16 +200,9 @@ func TestHandlePreview(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-
-	if len(app.state.Previews) != 1 {
-		t.Fatalf("got %d previews, want 1", len(app.state.Previews))
-	}
-	if app.state.Previews[0].NewName != "renamed.txt" {
-		t.Errorf("got new name %q, want %q", app.state.Previews[0].NewName, "renamed.txt")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.Previews, 1)
+	assert.Equal(t, "renamed.txt", app.state.Previews[0].NewName)
 }
 
 func TestHandlePreviewClear(t *testing.T) {
@@ -248,12 +223,8 @@ func TestHandlePreviewClear(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if len(app.state.Previews) != 0 {
-		t.Error("previews should be cleared")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Empty(t, app.state.Previews)
 }
 
 func TestHandleExecute(t *testing.T) {
@@ -270,7 +241,11 @@ func TestHandleExecute(t *testing.T) {
 		},
 	}
 	mpm := &mockPM{}
-	app := NewApp(mfs, mpm)
+	app := NewApp(
+		service.NewScannerService(mfs),
+		service.NewPatternService(mpm),
+		service.NewRenamerService(mfs),
+	)
 
 	app.state.SelectedDirectory = "/dir"
 	app.state.AllFiles = []domain.FileItem{
@@ -288,16 +263,9 @@ func TestHandleExecute(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if _, ok := renamedPairs["/dir/a.txt"]; !ok {
-		t.Error("expected rename to be called for a.txt")
-	}
-	// After execute, previews should be cleared
-	if len(app.state.Previews) != 0 {
-		t.Error("previews should be cleared after execute")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, renamedPairs, "/dir/a.txt")
+	assert.Empty(t, app.state.Previews)
 }
 
 func TestHandleExecuteNoPreviews(t *testing.T) {
@@ -309,9 +277,7 @@ func TestHandleExecuteNoPreviews(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if app.state.Error == "" {
-		t.Error("expected error when no previews")
-	}
+	assert.NotEmpty(t, app.state.Error, "expected error when no previews")
 }
 
 func TestHandleNames(t *testing.T) {
@@ -335,15 +301,9 @@ func TestHandleNames(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if len(app.state.NewNames) != 2 {
-		t.Fatalf("got %d names, want 2", len(app.state.NewNames))
-	}
-	if app.state.NewNames[0] != "alpha" {
-		t.Errorf("got %q, want %q", app.state.NewNames[0], "alpha")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.NewNames, 2)
+	assert.Equal(t, "alpha", app.state.NewNames[0])
 }
 
 func TestHandleNamesUpload(t *testing.T) {
@@ -369,15 +329,9 @@ func TestHandleNamesUpload(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Errorf("got status %d, want %d", rec.Code, http.StatusOK)
-	}
-	if len(app.state.NewNames) != 2 {
-		t.Fatalf("got %d names, want 2", len(app.state.NewNames))
-	}
-	if app.state.NewNames[0] != "new_name_1" {
-		t.Errorf("got %q, want %q", app.state.NewNames[0], "new_name_1")
-	}
+	assert.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.NewNames, 2)
+	assert.Equal(t, "new_name_1", app.state.NewNames[0])
 }
 
 func TestHandleNamesUploadNoFile(t *testing.T) {
@@ -389,7 +343,5 @@ func TestHandleNamesUploadNoFile(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if app.state.Error == "" {
-		t.Error("expected error when no file uploaded")
-	}
+	assert.NotEmpty(t, app.state.Error, "expected error when no file uploaded")
 }

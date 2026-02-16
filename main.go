@@ -12,6 +12,7 @@ import (
 	"github.com/omegaatt36/dub/app"
 	"github.com/omegaatt36/dub/internal/adapter/fs"
 	"github.com/omegaatt36/dub/internal/adapter/regex"
+	"github.com/omegaatt36/dub/internal/service"
 )
 
 //go:embed all:frontend/dist
@@ -20,7 +21,12 @@ var assets embed.FS
 func main() {
 	fileSystem := &fs.OSFileSystem{}
 	patternMatcher := &regex.Engine{}
-	application := app.NewApp(fileSystem, patternMatcher)
+
+	scanner := service.NewScannerService(fileSystem)
+	pattern := service.NewPatternService(patternMatcher)
+	renamer := service.NewRenamerService(fileSystem)
+
+	application := app.NewApp(scanner, pattern, renamer)
 
 	err := wails.Run(&options.App{
 		Title:  "Dub",

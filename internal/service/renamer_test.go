@@ -4,13 +4,17 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
 	"github.com/omegaatt36/dub/internal/domain"
+	"github.com/omegaatt36/dub/internal/mock"
 )
 
 func TestRenamerService_PreviewRename(t *testing.T) {
-	mockFS := &MockFileSystem{
-		RenameFunc: func(old, new string) error { return nil },
-	}
+	ctrl := gomock.NewController(t)
+	mockFS := mock.NewMockFileSystem(ctrl)
 	svc := NewRenamerService(mockFS)
 
 	t.Run("generates previews with extensions", func(t *testing.T) {
@@ -21,19 +25,10 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		names := []string{"new1", "new2"}
 
 		previews, err := svc.PreviewRename(files, names)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(previews) != 2 {
-			t.Fatalf("got %d previews, want 2", len(previews))
-		}
-		if previews[0].NewName != "new1.txt" {
-			t.Errorf("got new name %q, want %q", previews[0].NewName, "new1.txt")
-		}
-		if previews[1].NewName != "new2.txt" {
-			t.Errorf("got new name %q, want %q", previews[1].NewName, "new2.txt")
-		}
+		require.NoError(t, err)
+		require.Len(t, previews, 2)
+		assert.Equal(t, "new1.txt", previews[0].NewName)
+		assert.Equal(t, "new2.txt", previews[1].NewName)
 	})
 
 	t.Run("preserves extension if already present", func(t *testing.T) {
@@ -43,13 +38,8 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		names := []string{"new.txt"}
 
 		previews, err := svc.PreviewRename(files, names)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if previews[0].NewName != "new.txt" {
-			t.Errorf("got %q, want %q (should not double extension)", previews[0].NewName, "new.txt")
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "new.txt", previews[0].NewName, "should not double extension")
 	})
 
 	t.Run("detects conflicts (all duplicates marked)", func(t *testing.T) {
@@ -61,19 +51,10 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		names := []string{"same", "same", "unique"}
 
 		previews, err := svc.PreviewRename(files, names)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if !previews[0].Conflict {
-			t.Error("first duplicate should be marked as conflict")
-		}
-		if !previews[1].Conflict {
-			t.Error("second duplicate should be marked as conflict")
-		}
-		if previews[2].Conflict {
-			t.Error("unique name should not be conflict")
-		}
+		require.NoError(t, err)
+		assert.True(t, previews[0].Conflict, "first duplicate should be conflict")
+		assert.True(t, previews[1].Conflict, "second duplicate should be conflict")
+		assert.False(t, previews[2].Conflict, "unique name should not be conflict")
 	})
 
 	t.Run("mismatched count returns error", func(t *testing.T) {
@@ -81,9 +62,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		names := []string{"new1", "new2"}
 
 		_, err := svc.PreviewRename(files, names)
-		if err != domain.ErrMismatchedNames {
-			t.Errorf("expected ErrMismatchedNames, got: %v", err)
-		}
+		assert.ErrorIs(t, err, domain.ErrMismatchedNames)
 	})
 
 	t.Run("empty new name uses original", func(t *testing.T) {
@@ -93,24 +72,19 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		names := []string{""}
 
 		previews, err := svc.PreviewRename(files, names)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if previews[0].NewName != "keep.txt" {
-			t.Errorf("empty name should keep original, got %q", previews[0].NewName)
-		}
+		require.NoError(t, err)
+		assert.Equal(t, "keep.txt", previews[0].NewName, "empty name should keep original")
 	})
 }
 
 func TestRenamerService_ExecuteRename(t *testing.T) {
 	t.Run("renames non-conflict files", func(t *testing.T) {
-		var renamedPairs [][]string
-		mockFS := &MockFileSystem{
-			RenameFunc: func(old, new string) error {
-				renamedPairs = append(renamedPairs, []string{old, new})
-				return nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().Rename("/dir/a.txt", "/dir/x.txt").Return(nil)
+		mockFS.EXPECT().Rename("/dir/c.txt", "/dir/z.txt").Return(nil)
+
 		svc := NewRenamerService(mockFS)
 
 		previews := []domain.RenamePreview{
@@ -120,25 +94,14 @@ func TestRenamerService_ExecuteRename(t *testing.T) {
 		}
 
 		result := svc.ExecuteRename(previews)
-		if result.RenamedCount != 2 {
-			t.Errorf("got %d renamed, want 2", result.RenamedCount)
-		}
-		if !result.Success {
-			t.Error("expected success")
-		}
-		if len(renamedPairs) != 2 {
-			t.Errorf("rename called %d times, want 2", len(renamedPairs))
-		}
+		assert.Equal(t, 2, result.RenamedCount)
+		assert.True(t, result.Success)
 	})
 
 	t.Run("skips same-path renames", func(t *testing.T) {
-		var called int
-		mockFS := &MockFileSystem{
-			RenameFunc: func(old, new string) error {
-				called++
-				return nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
 		svc := NewRenamerService(mockFS)
 
 		previews := []domain.RenamePreview{
@@ -146,20 +109,15 @@ func TestRenamerService_ExecuteRename(t *testing.T) {
 		}
 
 		result := svc.ExecuteRename(previews)
-		if called != 0 {
-			t.Error("should not call rename for same path")
-		}
-		if result.RenamedCount != 0 {
-			t.Errorf("got %d renamed, want 0", result.RenamedCount)
-		}
+		assert.Equal(t, 0, result.RenamedCount)
 	})
 
 	t.Run("collects errors", func(t *testing.T) {
-		mockFS := &MockFileSystem{
-			RenameFunc: func(old, new string) error {
-				return fmt.Errorf("permission denied")
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().Rename("/dir/a.txt", "/dir/x.txt").Return(fmt.Errorf("permission denied"))
+
 		svc := NewRenamerService(mockFS)
 
 		previews := []domain.RenamePreview{
@@ -167,11 +125,7 @@ func TestRenamerService_ExecuteRename(t *testing.T) {
 		}
 
 		result := svc.ExecuteRename(previews)
-		if result.Success {
-			t.Error("should not be successful with errors")
-		}
-		if len(result.Errors) != 1 {
-			t.Errorf("got %d errors, want 1", len(result.Errors))
-		}
+		assert.False(t, result.Success)
+		assert.Len(t, result.Errors, 1)
 	})
 }

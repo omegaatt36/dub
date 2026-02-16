@@ -9,11 +9,16 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	adapterfs "github.com/omegaatt36/dub/internal/adapter/fs"
 	"github.com/omegaatt36/dub/internal/adapter/regex"
+	"github.com/omegaatt36/dub/internal/service"
 )
 
 // TestE2E_FullRenameFlow tests the complete flow:
@@ -24,15 +29,17 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	dir := t.TempDir()
 	for i := 1; i <= 20; i++ {
 		path := filepath.Join(dir, fmt.Sprintf("file_%d.pdf", i))
-		if err := os.WriteFile(path, []byte{}, 0644); err != nil {
-			t.Fatalf("failed to create test file: %v", err)
-		}
+		require.NoError(t, os.WriteFile(path, []byte{}, 0o644))
 	}
 
 	// Wire real adapters (no mocks)
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
-	app := NewApp(realFS, realPM)
+	app := NewApp(
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
 	handler := app.GetHandler()
 
 	// Step 1: Scan directory
@@ -43,21 +50,13 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("scan: got status %d", rec.Code)
-	}
-	if len(app.state.AllFiles) != 20 {
-		t.Fatalf("scan: got %d files, want 20", len(app.state.AllFiles))
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.AllFiles, 20)
 	t.Logf("  Scanned %d files", len(app.state.AllFiles))
 
 	// Verify natural sort: file_1, file_2, ..., file_10, ..., file_20
-	if app.state.AllFiles[0].Name != "file_1.pdf" {
-		t.Errorf("sort: first file = %q, want file_1.pdf", app.state.AllFiles[0].Name)
-	}
-	if app.state.AllFiles[9].Name != "file_10.pdf" {
-		t.Errorf("sort: 10th file = %q, want file_10.pdf", app.state.AllFiles[9].Name)
-	}
+	assert.Equal(t, "file_1.pdf", app.state.AllFiles[0].Name)
+	assert.Equal(t, "file_10.pdf", app.state.AllFiles[9].Name)
 
 	// Step 2: Filter by pattern
 	t.Log("Step 2: Filter by pattern (file_)")
@@ -67,12 +66,8 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("pattern: got status %d", rec.Code)
-	}
-	if len(app.state.MatchedFiles) != 20 {
-		t.Fatalf("pattern: got %d matched, want 20", len(app.state.MatchedFiles))
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.MatchedFiles, 20)
 	t.Logf("  Matched %d files", len(app.state.MatchedFiles))
 
 	// Step 3: Upload names file
@@ -81,26 +76,18 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
 	part, err := writer.CreateFormFile("namesfile", "names.txt")
-	if err != nil {
-		t.Fatalf("failed to create form file: %v", err)
-	}
-	part.Write([]byte(namesContent))
-	writer.Close()
+	require.NoError(t, err)
+	_, _ = part.Write([]byte(namesContent))
+	_ = writer.Close()
 
 	req = httptest.NewRequest("POST", "/api/names/upload", body)
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("upload: got status %d", rec.Code)
-	}
-	if len(app.state.NewNames) != 20 {
-		t.Fatalf("upload: got %d names, want 20", len(app.state.NewNames))
-	}
-	if app.state.NewNames[0] != "a" {
-		t.Errorf("upload: first name = %q, want %q", app.state.NewNames[0], "a")
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.NewNames, 20)
+	assert.Equal(t, "a", app.state.NewNames[0])
 	t.Logf("  Loaded %d names", len(app.state.NewNames))
 
 	// Step 4: Preview
@@ -110,27 +97,17 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("preview: got status %d", rec.Code)
-	}
-	if len(app.state.Previews) != 20 {
-		t.Fatalf("preview: got %d previews, want 20", len(app.state.Previews))
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Len(t, app.state.Previews, 20)
 
 	// Check preview details
 	p := app.state.Previews[0]
-	if p.OriginalName != "file_1.pdf" {
-		t.Errorf("preview[0]: original = %q, want file_1.pdf", p.OriginalName)
-	}
-	if p.NewName != "a.pdf" {
-		t.Errorf("preview[0]: new = %q, want a.pdf", p.NewName)
-	}
+	assert.Equal(t, "file_1.pdf", p.OriginalName)
+	assert.Equal(t, "a.pdf", p.NewName)
 
 	// Check no conflicts
 	for i, p := range app.state.Previews {
-		if p.Conflict {
-			t.Errorf("preview[%d]: unexpected conflict for %q -> %q", i, p.OriginalName, p.NewName)
-		}
+		assert.False(t, p.Conflict, "preview[%d]: unexpected conflict for %q -> %q", i, p.OriginalName, p.NewName)
 	}
 	t.Logf("  Generated %d previews, 0 conflicts", len(app.state.Previews))
 
@@ -141,9 +118,7 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("execute: got status %d", rec.Code)
-	}
+	require.Equal(t, http.StatusOK, rec.Code)
 
 	// Verify files on disk were actually renamed
 	expectedFiles := []string{
@@ -154,9 +129,7 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	}
 
 	entries, err := os.ReadDir(dir)
-	if err != nil {
-		t.Fatalf("failed to read dir after rename: %v", err)
-	}
+	require.NoError(t, err)
 
 	actualNames := make(map[string]bool)
 	for _, e := range entries {
@@ -164,36 +137,24 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	}
 
 	for _, expected := range expectedFiles {
-		if !actualNames[expected] {
-			t.Errorf("expected file %q not found after rename", expected)
-		}
+		assert.True(t, actualNames[expected], "expected file %q not found after rename", expected)
 	}
 
 	// Verify old files are gone
 	for i := 1; i <= 20; i++ {
 		old := fmt.Sprintf("file_%d.pdf", i)
-		if actualNames[old] {
-			t.Errorf("old file %q still exists after rename", old)
-		}
+		assert.False(t, actualNames[old], "old file %q still exists after rename", old)
 	}
 
 	t.Logf("  Verified %d files renamed successfully on disk", len(expectedFiles))
 
 	// Verify state was reset
-	if len(app.state.Previews) != 0 {
-		t.Error("previews should be cleared after execute")
-	}
-	if len(app.state.NewNames) != 0 {
-		t.Error("names should be cleared after execute")
-	}
+	assert.Empty(t, app.state.Previews, "previews should be cleared after execute")
+	assert.Empty(t, app.state.NewNames, "names should be cleared after execute")
 
 	// Verify re-scan happened
-	if len(app.state.AllFiles) != 20 {
-		t.Errorf("re-scan: got %d files, want 20", len(app.state.AllFiles))
-	}
-	if app.state.AllFiles[0].Name != "a.pdf" {
-		t.Errorf("re-scan: first file = %q, want a.pdf", app.state.AllFiles[0].Name)
-	}
+	assert.Len(t, app.state.AllFiles, 20)
+	assert.Equal(t, "a.pdf", app.state.AllFiles[0].Name)
 	t.Log("  State reset and re-scan verified")
 }
 
@@ -202,12 +163,16 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 	dir := t.TempDir()
 	for i := 1; i <= 5; i++ {
 		path := filepath.Join(dir, fmt.Sprintf("photo_%d.jpg", i))
-		os.WriteFile(path, []byte{}, 0644)
+		_ = os.WriteFile(path, []byte{}, 0o644)
 	}
 
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
-	app := NewApp(realFS, realPM)
+	app := NewApp(
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
 	handler := app.GetHandler()
 
 	// Scan
@@ -217,9 +182,7 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if len(app.state.AllFiles) != 5 {
-		t.Fatalf("scan: got %d files, want 5", len(app.state.AllFiles))
-	}
+	require.Len(t, app.state.AllFiles, 5)
 
 	// Generate with template
 	form = url.Values{"template": {"vacation_{index}"}}
@@ -228,12 +191,8 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if len(app.state.NewNames) != 5 {
-		t.Fatalf("generate: got %d names, want 5", len(app.state.NewNames))
-	}
-	if app.state.NewNames[0] != "vacation_1" {
-		t.Errorf("generate: first name = %q, want vacation_1", app.state.NewNames[0])
-	}
+	require.Len(t, app.state.NewNames, 5)
+	assert.Equal(t, "vacation_1", app.state.NewNames[0])
 
 	// Preview
 	req = httptest.NewRequest("POST", "/api/preview", nil)
@@ -241,9 +200,7 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 	rec = httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if app.state.Previews[0].NewName != "vacation_1.jpg" {
-		t.Errorf("preview: new name = %q, want vacation_1.jpg", app.state.Previews[0].NewName)
-	}
+	assert.Equal(t, "vacation_1.jpg", app.state.Previews[0].NewName)
 
 	// Execute
 	req = httptest.NewRequest("POST", "/api/execute", nil)
@@ -260,16 +217,7 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 
 	for i := 1; i <= 5; i++ {
 		expected := fmt.Sprintf("vacation_%d.jpg", i)
-		found := false
-		for _, n := range names {
-			if n == expected {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected %q not found, got %v", expected, names)
-		}
+		assert.True(t, slices.Contains(names, expected), "expected %q not found, got %v", expected, names)
 	}
 }
 
@@ -279,12 +227,16 @@ func TestE2E_AlphaPatternExcludesNumeric(t *testing.T) {
 	dir := t.TempDir()
 	// Create mix of alpha and numeric filenames
 	for _, name := range []string{"a.pdf", "b.pdf", "c.pdf", "55688.pdf", "123.pdf"} {
-		os.WriteFile(filepath.Join(dir, name), []byte{}, 0644)
+		_ = os.WriteFile(filepath.Join(dir, name), []byte{}, 0o644)
 	}
 
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
-	app := NewApp(realFS, realPM)
+	app := NewApp(
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
 	handler := app.GetHandler()
 
 	// Scan
@@ -294,9 +246,7 @@ func TestE2E_AlphaPatternExcludesNumeric(t *testing.T) {
 	rec := httptest.NewRecorder()
 	handler.ServeHTTP(rec, req)
 
-	if len(app.state.AllFiles) != 5 {
-		t.Fatalf("scan: got %d files, want 5", len(app.state.AllFiles))
-	}
+	require.Len(t, app.state.AllFiles, 5)
 
 	// Filter with [alpha] — should match only a, b, c (not 55688, 123)
 	form = url.Values{"pattern": {"[alpha]"}}
@@ -306,18 +256,11 @@ func TestE2E_AlphaPatternExcludesNumeric(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	matched := app.state.MatchedFiles
-	if len(matched) != 3 {
-		names := make([]string, len(matched))
-		for i, f := range matched {
-			names[i] = f.Name
-		}
-		t.Fatalf("[alpha] matched %d files %v, want 3 (a,b,c only)", len(matched), names)
-	}
+	require.Len(t, matched, 3, "[alpha] should match only a, b, c")
 
 	for _, f := range matched {
-		if f.Name == "55688.pdf" || f.Name == "123.pdf" {
-			t.Errorf("[alpha] should NOT match %q", f.Name)
-		}
+		assert.NotEqual(t, "55688.pdf", f.Name, "[alpha] should NOT match numeric stems")
+		assert.NotEqual(t, "123.pdf", f.Name, "[alpha] should NOT match numeric stems")
 	}
 	t.Logf("  [alpha] correctly matched %d files, excluded numeric stems", len(matched))
 }
@@ -325,13 +268,17 @@ func TestE2E_AlphaPatternExcludesNumeric(t *testing.T) {
 // TestE2E_ConflictPrevention tests that conflicting names are NOT renamed.
 func TestE2E_ConflictPrevention(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "a.txt"), []byte("aaa"), 0644)
-	os.WriteFile(filepath.Join(dir, "b.txt"), []byte("bbb"), 0644)
-	os.WriteFile(filepath.Join(dir, "c.txt"), []byte("ccc"), 0644)
+	_ = os.WriteFile(filepath.Join(dir, "a.txt"), []byte("aaa"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "b.txt"), []byte("bbb"), 0o644)
+	_ = os.WriteFile(filepath.Join(dir, "c.txt"), []byte("ccc"), 0o644)
 
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
-	app := NewApp(realFS, realPM)
+	app := NewApp(
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
 	handler := app.GetHandler()
 
 	// Scan
@@ -357,9 +304,7 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 			conflicts++
 		}
 	}
-	if conflicts != 2 {
-		t.Errorf("expected 2 conflicts, got %d", conflicts)
-	}
+	assert.Equal(t, 2, conflicts)
 
 	// Execute — should only rename the non-conflict file
 	req = httptest.NewRequest("POST", "/api/execute", nil)
@@ -374,16 +319,8 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 		names[e.Name()] = true
 	}
 
-	if !names["a.txt"] {
-		t.Error("a.txt should still exist (conflict)")
-	}
-	if !names["b.txt"] {
-		t.Error("b.txt should still exist (conflict)")
-	}
-	if !names["unique.txt"] {
-		t.Error("unique.txt should exist (renamed from c.txt)")
-	}
-	if names["c.txt"] {
-		t.Error("c.txt should be gone (renamed to unique.txt)")
-	}
+	assert.True(t, names["a.txt"], "a.txt should still exist (conflict)")
+	assert.True(t, names["b.txt"], "b.txt should still exist (conflict)")
+	assert.True(t, names["unique.txt"], "unique.txt should exist (renamed from c.txt)")
+	assert.False(t, names["c.txt"], "c.txt should be gone (renamed to unique.txt)")
 }

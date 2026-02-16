@@ -1,8 +1,10 @@
 package regex
 
 import (
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/omegaatt36/dub/internal/domain"
 )
@@ -26,10 +28,7 @@ func TestEngine_ExpandShortcuts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
-			result := e.ExpandShortcuts(tt.input)
-			if result != tt.expected {
-				t.Errorf("ExpandShortcuts(%q) = %q, want %q", tt.input, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, e.ExpandShortcuts(tt.input))
 		})
 	}
 }
@@ -57,20 +56,12 @@ func TestEngine_Match(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			matched, err := e.Match(tt.pattern, tt.input)
 			if tt.wantErr {
-				if err == nil {
-					t.Fatal("expected error")
-				}
-				if !errors.Is(err, domain.ErrInvalidPattern) {
-					t.Errorf("expected ErrInvalidPattern, got: %v", err)
-				}
+				require.Error(t, err)
+				assert.ErrorIs(t, err, domain.ErrInvalidPattern)
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-			if matched != tt.matched {
-				t.Errorf("Match(%q, %q) = %v, want %v", tt.pattern, tt.input, matched, tt.matched)
-			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.matched, matched)
 		})
 	}
 }

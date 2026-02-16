@@ -7,24 +7,23 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/omegaatt36/dub/internal/port"
-	"github.com/omegaatt36/dub/internal/service"
 )
 
 // App is the main application struct that composes all services.
 type App struct {
-	scanner *service.ScannerService
-	pattern *service.PatternService
-	renamer *service.RenamerService
+	scanner port.Scanner
+	pattern port.PatternFilter
+	renamer port.Renamer
 	state   *AppState
 	ctx     context.Context
 }
 
-// NewApp creates a new App with injected dependencies.
-func NewApp(fs port.FileSystem, pm port.PatternMatcher) *App {
+// NewApp creates a new App with injected service dependencies.
+func NewApp(scanner port.Scanner, pattern port.PatternFilter, renamer port.Renamer) *App {
 	return &App{
-		scanner: service.NewScannerService(fs),
-		pattern: service.NewPatternService(pm),
-		renamer: service.NewRenamerService(fs),
+		scanner: scanner,
+		pattern: pattern,
+		renamer: renamer,
 		state:   NewAppState(),
 	}
 }
@@ -40,8 +39,7 @@ func (a *App) Startup(ctx context.Context) {
 }
 
 // Shutdown is called when the Wails app is closing.
-func (a *App) Shutdown(ctx context.Context) {
-	// Cleanup if needed
+func (a *App) Shutdown(_ context.Context) {
 }
 
 // OpenDirectoryDialog opens a native OS directory picker and returns the selected path.
