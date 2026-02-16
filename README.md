@@ -45,7 +45,7 @@ All state is server-side. The frontend is pure HTML rendered by Templ, with HTMX
 
 ### Prerequisites
 
-- [Go](https://go.dev/) 1.25+
+- [Go](https://go.dev/) 1.26+
 - [Task](https://taskfile.dev/) (Task runner)
 - [Wails CLI](https://wails.io/docs/gettingstarted/installation) v2
 - [Templ](https://templ.guide/quick-start/installation) CLI
