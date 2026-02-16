@@ -1,121 +1,64 @@
 package service
 
 import (
-	"io/fs"
 	"os"
 	"testing"
-	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
+
+	"github.com/omegaatt36/dub/internal/mock"
+	"github.com/omegaatt36/dub/internal/testutil"
 )
-
-// mockDirEntry implements os.DirEntry for testing.
-type mockDirEntry struct {
-	name  string
-	isDir bool
-	info  os.FileInfo
-}
-
-func (m *mockDirEntry) Name() string               { return m.name }
-func (m *mockDirEntry) IsDir() bool                { return m.isDir }
-func (m *mockDirEntry) Type() fs.FileMode          { return 0 }
-func (m *mockDirEntry) Info() (os.FileInfo, error) { return m.info, nil }
-
-// mockFileInfo implements os.FileInfo for testing.
-type mockFileInfo struct {
-	name string
-	size int64
-}
-
-func (m *mockFileInfo) Name() string       { return m.name }
-func (m *mockFileInfo) Size() int64        { return m.size }
-func (m *mockFileInfo) Mode() fs.FileMode  { return 0644 }
-func (m *mockFileInfo) ModTime() time.Time { return time.Time{} }
-func (m *mockFileInfo) IsDir() bool        { return false }
-func (m *mockFileInfo) Sys() any           { return nil }
-
-// MockFileSystem implements port.FileSystem for testing.
-type MockFileSystem struct {
-	ReadDirFunc func(string) ([]os.DirEntry, error)
-	StatFunc    func(string) (os.FileInfo, error)
-	RenameFunc  func(string, string) error
-}
-
-func (m *MockFileSystem) ReadDir(path string) ([]os.DirEntry, error) {
-	return m.ReadDirFunc(path)
-}
-
-func (m *MockFileSystem) Stat(path string) (os.FileInfo, error) {
-	return m.StatFunc(path)
-}
-
-func (m *MockFileSystem) Rename(oldpath, newpath string) error {
-	return m.RenameFunc(oldpath, newpath)
-}
 
 func TestScannerService_Scan(t *testing.T) {
 	t.Run("scans files and sorts naturally", func(t *testing.T) {
-		mockFS := &MockFileSystem{
-			ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-				return []os.DirEntry{
-					&mockDirEntry{name: "file_10.txt", info: &mockFileInfo{name: "file_10.txt", size: 100}},
-					&mockDirEntry{name: "file_2.txt", info: &mockFileInfo{name: "file_2.txt", size: 200}},
-					&mockDirEntry{name: "file_1.txt", info: &mockFileInfo{name: "file_1.txt", size: 300}},
-					&mockDirEntry{name: "subdir", isDir: true, info: &mockFileInfo{name: "subdir"}},
-				}, nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().ReadDir("/test").Return([]os.DirEntry{
+			testutil.NewMockDirEntry("file_10.txt", 100),
+			testutil.NewMockDirEntry("file_2.txt", 200),
+			testutil.NewMockDirEntry("file_1.txt", 300),
+			testutil.NewMockDirDirEntry("subdir"),
+		}, nil)
 
 		scanner := NewScannerService(mockFS)
 		files, err := scanner.Scan("/test")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		if len(files) != 3 {
-			t.Fatalf("got %d files, want 3 (directories excluded)", len(files))
-		}
+		require.NoError(t, err)
+		require.Len(t, files, 3, "directories excluded")
 
 		expected := []string{"file_1.txt", "file_2.txt", "file_10.txt"}
 		for i, f := range files {
-			if f.Name != expected[i] {
-				t.Errorf("position %d: got %q, want %q", i, f.Name, expected[i])
-			}
+			assert.Equal(t, expected[i], f.Name, "position %d", i)
 		}
 	})
 
 	t.Run("empty directory", func(t *testing.T) {
-		mockFS := &MockFileSystem{
-			ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-				return []os.DirEntry{}, nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().ReadDir("/empty").Return([]os.DirEntry{}, nil)
 
 		scanner := NewScannerService(mockFS)
 		files, err := scanner.Scan("/empty")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		if len(files) != 0 {
-			t.Errorf("got %d files, want 0", len(files))
-		}
+		require.NoError(t, err)
+		assert.Empty(t, files)
 	})
 
 	t.Run("extracts extension", func(t *testing.T) {
-		mockFS := &MockFileSystem{
-			ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-				return []os.DirEntry{
-					&mockDirEntry{name: "photo.JPG", info: &mockFileInfo{name: "photo.JPG", size: 1000}},
-				}, nil
-			},
-		}
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().ReadDir("/test").Return([]os.DirEntry{
+			testutil.NewMockDirEntry("photo.JPG", 1000),
+		}, nil)
 
 		scanner := NewScannerService(mockFS)
 		files, err := scanner.Scan("/test")
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		require.NoError(t, err)
 
-		if files[0].Extension != ".jpg" {
-			t.Errorf("got extension %q, want %q", files[0].Extension, ".jpg")
-		}
+		assert.Equal(t, ".jpg", files[0].Extension)
 	})
 }

@@ -2,6 +2,8 @@ package domain
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNaturalSort(t *testing.T) {
@@ -62,9 +64,7 @@ func TestNaturalSort(t *testing.T) {
 			NaturalSort(files)
 
 			for i, f := range files {
-				if f.Name != tt.expected[i] {
-					t.Errorf("position %d: got %q, want %q", i, f.Name, tt.expected[i])
-				}
+				assert.Equal(t, tt.expected[i], f.Name, "position %d", i)
 			}
 		})
 	}
@@ -87,10 +87,7 @@ func TestFormatFileSize(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			result := FormatFileSize(tt.size)
-			if result != tt.expected {
-				t.Errorf("FormatFileSize(%d) = %q, want %q", tt.size, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, FormatFileSize(tt.size))
 		})
 	}
 }
@@ -113,10 +110,7 @@ func TestFileTypeIcon(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.ext, func(t *testing.T) {
-			result := FileTypeIcon(tt.ext)
-			if result != tt.expected {
-				t.Errorf("FileTypeIcon(%q) = %q, want %q", tt.ext, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, FileTypeIcon(tt.ext))
 		})
 	}
 }

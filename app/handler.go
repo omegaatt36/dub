@@ -162,7 +162,9 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	content, err := io.ReadAll(file)
 	if err != nil {
@@ -257,5 +259,5 @@ func (a *App) displayFiles() []domain.FileItem {
 
 func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Component) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	component.Render(r.Context(), w)
+	_ = component.Render(r.Context(), w)
 }
