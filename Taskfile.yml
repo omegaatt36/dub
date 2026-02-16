@@ -12,7 +12,6 @@ tasks:
       - ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --minify
     sources:
       - web/static/css/input.css
-      - tailwind.config.js
       - web/template/**/*.templ
       - web/index.html
     generates:

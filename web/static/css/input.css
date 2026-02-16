@@ -1,6 +1,53 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+
+@source "../../template/**/*.templ";
+@source "../../index.html";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+    --color-gray-50: #f2f0e5;
+    --color-gray-100: #e6e4d9;
+    --color-gray-200: #cecdc3;
+    --color-gray-300: #b7b5ac;
+    --color-gray-400: #878580;
+    --color-gray-500: #575653;
+    --color-gray-600: #403e3c;
+    --color-gray-700: #343331;
+    --color-gray-800: #282726;
+    --color-gray-900: #1c1b1a;
+    --color-gray-950: #100f0f;
+
+    --color-blue-300: #4385be;
+    --color-blue-400: #4385be;
+    --color-blue-500: #205ea6;
+    --color-blue-600: #205ea6;
+    --color-blue-700: #18467d;
+
+    --color-emerald-200: #b5c78a;
+    --color-emerald-400: #879a39;
+    --color-emerald-500: #66800b;
+    --color-emerald-600: #4d6108;
+
+    --color-green-300: #879a39;
+    --color-green-400: #879a39;
+    --color-green-500: #66800b;
+    --color-green-600: #4d6108;
+
+    --color-red-200: #e8a9a7;
+    --color-red-400: #d1736f;
+    --color-red-500: #af3029;
+    --color-red-900: #5c1c19;
+
+    --color-purple-300: #8b7ec8;
+    --color-purple-400: #8b7ec8;
+    --color-purple-500: #5e409d;
+
+    --color-amber-300: #fad77b;
+    --color-amber-400: #fad77b;
+    --color-amber-500: #d0a215;
+    --color-amber-600: #ad8301;
+}
 
 /* HTMX loading indicator */
 .htmx-indicator {

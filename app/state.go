@@ -10,7 +10,6 @@ type AppState struct {
 	Pattern           string
 	NewNames          []string
 	Previews          []domain.RenamePreview
-	IsLoading         bool
 	Error             string
 	NamingMethod      string // "manual" | "file" | "template"
 	Template          string
