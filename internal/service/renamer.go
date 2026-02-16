@@ -70,6 +70,15 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 		}
 	}
 
+	// Compute diffs for changed files
+	for i := range previews {
+		if previews[i].OriginalName != previews[i].NewName {
+			previews[i].OriginalDiff, previews[i].NewDiff = domain.ComputeDiff(
+				previews[i].OriginalName, previews[i].NewName,
+			)
+		}
+	}
+
 	return previews, nil
 }
 

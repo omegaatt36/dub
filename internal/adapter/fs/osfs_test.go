@@ -64,3 +64,22 @@ func TestOSFileSystem_Rename(t *testing.T) {
 	assert.FileExists(t, newPath)
 	assert.NoFileExists(t, oldPath)
 }
+
+func TestOSFileSystem_ReadFile(t *testing.T) {
+	fs := &OSFileSystem{}
+
+	t.Run("reads file content", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "test.txt")
+		_ = os.WriteFile(path, []byte("hello\nworld"), 0o644)
+
+		content, err := fs.ReadFile(path)
+		require.NoError(t, err)
+		assert.Equal(t, []byte("hello\nworld"), content)
+	})
+
+	t.Run("nonexistent file returns error", func(t *testing.T) {
+		_, err := fs.ReadFile("/nonexistent/file.txt")
+		require.Error(t, err)
+	})
+}

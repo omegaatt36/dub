@@ -31,7 +31,7 @@ func main() {
 	pattern := service.NewPatternService(patternMatcher)
 	renamer := service.NewRenamerService(fileSystem)
 
-	application := app.NewApp(scanner, pattern, renamer)
+	application := app.NewApp(fileSystem, scanner, pattern, renamer)
 
 	err := wails.Run(&options.App{
 		Title:  "Dub",

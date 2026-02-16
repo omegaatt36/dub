@@ -42,6 +42,18 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v1
 
+      - name: Install Tailwind CSS CLI
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-macos-arm64
+            chmod +x tailwindcss-macos-arm64
+            mv tailwindcss-macos-arm64 tailwindcss
+          else
+            curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/download/v3.4.17/tailwindcss-linux-x64
+            chmod +x tailwindcss-linux-x64
+            mv tailwindcss-linux-x64 tailwindcss
+          fi
+
       - name: Generate and prepare frontend
         run: |
           task generate

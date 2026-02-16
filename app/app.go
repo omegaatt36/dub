@@ -22,6 +22,7 @@ func WithLogger(logger *slog.Logger) Option {
 
 // App is the main application struct that composes all services.
 type App struct {
+	fs      port.FileSystem
 	scanner port.Scanner
 	pattern port.PatternFilter
 	renamer port.Renamer
@@ -31,8 +32,9 @@ type App struct {
 }
 
 // NewApp creates a new App with injected service dependencies.
-func NewApp(scanner port.Scanner, pattern port.PatternFilter, renamer port.Renamer, opts ...Option) *App {
+func NewApp(fs port.FileSystem, scanner port.Scanner, pattern port.PatternFilter, renamer port.Renamer, opts ...Option) *App {
 	a := &App{
+		fs:      fs,
 		scanner: scanner,
 		pattern: pattern,
 		renamer: renamer,

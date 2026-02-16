@@ -15,6 +15,8 @@ type RenamePreview struct {
 	OriginalPath string
 	NewPath      string
 	Conflict     bool
+	OriginalDiff []DiffSegment
+	NewDiff      []DiffSegment
 }
 
 type RenameResult struct {
