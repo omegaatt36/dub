@@ -19,6 +19,11 @@ import (
 var assets embed.FS
 
 func main() {
+	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	fileSystem := &fs.OSFileSystem{}
 	patternMatcher := &regex.Engine{}
 
@@ -35,6 +40,12 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets:  assets,
 			Handler: application.GetHandler(),
+		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: true,
+			CSSDropProperty:    "--wails-drop-target",
+			CSSDropValue:       "drop",
 		},
 		OnStartup:  application.Startup,
 		OnShutdown: application.Shutdown,

@@ -324,3 +324,88 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 	assert.True(t, names["unique.txt"], "unique.txt should exist (renamed from c.txt)")
 	assert.False(t, names["c.txt"], "c.txt should be gone (renamed to unique.txt)")
 }
+
+// TestE2E_UndoRename tests: scan → generate names → preview → execute → undo
+func TestE2E_UndoRename(t *testing.T) {
+	dir := t.TempDir()
+	for i := 1; i <= 3; i++ {
+		path := filepath.Join(dir, fmt.Sprintf("file_%d.txt", i))
+		require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf("content_%d", i)), 0o644))
+	}
+
+	realFS := &adapterfs.OSFileSystem{}
+	realPM := &regex.Engine{}
+	app := NewApp(
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
+	handler := app.GetHandler()
+
+	// Step 1: Scan
+	form := url.Values{"path": {dir}}
+	req := httptest.NewRequest("POST", "/api/scan", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.AllFiles, 3)
+
+	// Step 2: Generate names
+	form = url.Values{"template": {"renamed_{index}"}}
+	req = httptest.NewRequest("POST", "/api/names/generate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.NewNames, 3)
+
+	// Step 3: Preview
+	req = httptest.NewRequest("POST", "/api/preview", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.Previews, 3)
+
+	// Step 4: Execute
+	req = httptest.NewRequest("POST", "/api/execute", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.True(t, app.state.CanUndo, "CanUndo should be true after execute")
+
+	// Verify files were renamed
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	renamedNames := make([]string, len(entries))
+	for i, e := range entries {
+		renamedNames[i] = e.Name()
+	}
+	assert.Contains(t, renamedNames, "renamed_1.txt")
+	assert.Contains(t, renamedNames, "renamed_2.txt")
+	assert.Contains(t, renamedNames, "renamed_3.txt")
+
+	// Step 5: Undo
+	req = httptest.NewRequest("POST", "/api/undo", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, app.state.CanUndo, "CanUndo should be false after undo")
+
+	// Verify files were restored to original names
+	entries, err = os.ReadDir(dir)
+	require.NoError(t, err)
+	restoredNames := make([]string, len(entries))
+	for i, e := range entries {
+		restoredNames[i] = e.Name()
+	}
+	assert.Contains(t, restoredNames, "file_1.txt")
+	assert.Contains(t, restoredNames, "file_2.txt")
+	assert.Contains(t, restoredNames, "file_3.txt")
+	assert.NotContains(t, restoredNames, "renamed_1.txt")
+
+	// Verify file contents preserved
+	content, err := os.ReadFile(filepath.Join(dir, "file_1.txt"))
+	require.NoError(t, err)
+	assert.Equal(t, "content_1", string(content))
+}

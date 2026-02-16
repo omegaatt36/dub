@@ -6,13 +6,13 @@ templ ErrorBanner(message string) {
 	if message != "" {
 		<div
 			id="error-banner"
-			class="fixed top-4 right-4 bg-red-900 border border-red-700 text-red-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50"
+			class="fixed top-4 right-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50"
 			role="alert"
 		>
 			<div class="flex items-start gap-2">
 				<span class="flex-1 text-sm">{ message }</span>
 				<button
-					class="text-red-300 hover:text-red-100 font-bold"
+					class="text-red-600 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100 font-bold"
 					onclick="this.parentElement.parentElement.remove()"
 				>
 					&times;
@@ -23,7 +23,7 @@ templ ErrorBanner(message string) {
 }
 
 templ FileIcon(fileType string) {
-	<span class="text-gray-400">
+	<span class="text-gray-500 dark:text-gray-400">
 		switch fileType {
 			case "image":
 				<svg class="w-4 h-4 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24">

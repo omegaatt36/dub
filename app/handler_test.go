@@ -1,7 +1,9 @@
 package app
 
 import (
+	"bytes"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -344,4 +346,106 @@ func TestHandleNamesUploadNoFile(t *testing.T) {
 	handler.ServeHTTP(rec, req)
 
 	assert.NotEmpty(t, app.state.Error, "expected error when no file uploaded")
+}
+
+func TestHandleExecuteLogsResult(t *testing.T) {
+	var logBuf bytes.Buffer
+	logger := slog.New(slog.NewTextHandler(&logBuf, nil))
+
+	renamedPairs := map[string]string{}
+	mfs := &mockFS{
+		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
+			return []os.DirEntry{
+				&mockDirEntry{name: "renamed.txt", info: &mockFileInfo{name: "renamed.txt", size: 100}},
+			}, nil
+		},
+		RenameFunc: func(old, new string) error {
+			renamedPairs[old] = new
+			return nil
+		},
+	}
+	mpm := &mockPM{}
+	app := NewApp(
+		service.NewScannerService(mfs),
+		service.NewPatternService(mpm),
+		service.NewRenamerService(mfs),
+		WithLogger(logger),
+	)
+
+	app.state.SelectedDirectory = "/dir"
+	app.state.AllFiles = []domain.FileItem{
+		{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},
+	}
+	app.state.MatchedFiles = app.state.AllFiles
+	app.state.Previews = []domain.RenamePreview{
+		{OriginalName: "a.txt", NewName: "renamed.txt", OriginalPath: "/dir/a.txt", NewPath: "/dir/renamed.txt"},
+	}
+
+	handler := app.GetHandler()
+
+	req := httptest.NewRequest("POST", "/api/execute", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, logBuf.String(), "rename executed")
+}
+
+func TestHandleUndo(t *testing.T) {
+	renamedPairs := map[string]string{}
+	mfs := &mockFS{
+		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
+			return []os.DirEntry{
+				&mockDirEntry{name: "a.txt", info: &mockFileInfo{name: "a.txt", size: 100}},
+			}, nil
+		},
+		RenameFunc: func(old, new string) error {
+			renamedPairs[old] = new
+			return nil
+		},
+	}
+	mpm := &mockPM{}
+	app := NewApp(
+		service.NewScannerService(mfs),
+		service.NewPatternService(mpm),
+		service.NewRenamerService(mfs),
+	)
+
+	// Simulate state after a successful execute
+	app.state.SelectedDirectory = "/dir"
+	app.state.CanUndo = true
+	app.state.LastRenameHistory = []domain.RenamePreview{
+		{
+			OriginalName: "a.txt",
+			NewName:      "renamed.txt",
+			OriginalPath: "/dir/a.txt",
+			NewPath:      "/dir/renamed.txt",
+		},
+	}
+
+	handler := app.GetHandler()
+
+	req := httptest.NewRequest("POST", "/api/undo", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	// Undo should reverse: renamed.txt -> a.txt
+	assert.Contains(t, renamedPairs, "/dir/renamed.txt")
+	assert.Equal(t, "/dir/a.txt", renamedPairs["/dir/renamed.txt"])
+	assert.False(t, app.state.CanUndo, "CanUndo should be false after undo")
+}
+
+func TestHandleUndoNothingToUndo(t *testing.T) {
+	app := newTestApp()
+	handler := app.GetHandler()
+
+	req := httptest.NewRequest("POST", "/api/undo", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	assert.NotEmpty(t, app.state.Error)
 }

@@ -2,8 +2,8 @@ package template
 
 import "github.com/omegaatt36/dub/internal/domain"
 
-templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.RenameResult) {
-	<div id="actions" class="bg-gray-800 rounded-lg p-4 border border-gray-700 shadow-sm mt-auto">
+templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.RenameResult, canUndo bool) {
+	<div id="actions" class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm mt-auto">
 		<div class="flex items-center justify-end gap-3">
 			if hasFiles && hasNames && !hasPreviews {
 				<button
@@ -27,9 +27,9 @@ templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.Ren
 					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
 					Execute Rename
 				</button>
-				
-				<div id="confirm-execute" class="items-center gap-3 bg-gray-900/50 px-2 py-1 rounded-lg border border-gray-700" style="display:none;">
-					<span class="text-gray-300 text-sm font-medium px-2">Are you sure?</span>
+
+				<div id="confirm-execute" class="items-center gap-3 bg-gray-100 dark:bg-gray-900/50 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700" style="display:none;">
+					<span class="text-gray-900 dark:text-gray-300 text-sm font-medium px-2">Are you sure?</span>
 					<button
 						type="button"
 						class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors shadow-sm"
@@ -41,16 +41,16 @@ templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.Ren
 					</button>
 					<button
 						type="button"
-						class="bg-gray-700 hover:bg-gray-600 text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors border border-gray-600"
+						class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors border border-gray-200 dark:border-gray-600"
 						onclick="this.parentElement.style.display='none'; document.getElementById('execute-btn').style.display='inline-flex';"
 					>
 						Cancel
 					</button>
 				</div>
-				
+
 				<button
 					type="button"
-					class="text-gray-400 hover:text-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:underline"
+					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:underline"
 					hx-post="/api/preview"
 					hx-target="#main-content"
 					hx-swap="innerHTML"
@@ -59,18 +59,30 @@ templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.Ren
 					Clear Preview
 				</button>
 			}
+			if canUndo && !hasPreviews {
+				<button
+					type="button"
+					class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-md text-sm font-semibold shadow-lg transition-all transform active:scale-95 flex items-center gap-2"
+					hx-post="/api/undo"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+				>
+					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+					Undo Rename
+				</button>
+			}
 			if !hasFiles {
-				<span class="text-gray-500 text-sm italic py-2">Select a directory to get started.</span>
+				<span class="text-gray-500 dark:text-gray-400 text-sm italic py-2">Select a directory to get started.</span>
 			} else if !hasNames {
-				<span class="text-gray-500 text-sm italic py-2">Set new names to continue.</span>
+				<span class="text-gray-500 dark:text-gray-400 text-sm italic py-2">Set new names to continue.</span>
 			}
 		</div>
 		
 		if result != nil {
 			<div
 				class={ "mt-4 p-4 rounded-md text-sm shadow-md flex items-start gap-3",
-				templ.KV("bg-emerald-900/20 border border-emerald-500/30 text-emerald-200", result.Success),
-				templ.KV("bg-red-900/20 border border-red-500/30 text-red-200", !result.Success) }
+				templ.KV("bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-200/50 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-200", result.Success),
+				templ.KV("bg-red-50/50 dark:bg-red-900/20 border border-red-200/50 dark:border-red-500/30 text-red-800 dark:text-red-200", !result.Success) }
 			>
 				if result.Success {
 					<svg class="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>

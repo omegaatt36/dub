@@ -126,6 +126,34 @@
     }
     savedInputState = null;
   });
+
+  // --- Drag & Drop (Wails native API) ---
+
+  // Smart drop: detect WHERE the file was dropped.
+  // - Over "From File" upload area + .txt/.csv → import as names
+  // - Anywhere else → scan directory (or parent dir if file)
+  document.addEventListener("DOMContentLoaded", () => {
+    const rt = window.runtime;
+    if (rt && rt.OnFileDrop) {
+      rt.OnFileDrop((x, y, paths) => {
+        if (!paths || paths.length === 0) return;
+
+        const path = paths[0];
+        const el = document.elementFromPoint(x, y);
+        const isOverUpload = el && el.closest("[data-drop-names]");
+        const isNamesFile = /\.(txt|csv)$/i.test(path);
+
+        if (isOverUpload && isNamesFile) {
+          htmx.ajax("POST", "/api/names/load", {
+            values: { path },
+            target: "#main-content",
+          });
+        } else {
+          triggerScan(path);
+        }
+      }, true);
+    }
+  });
 })();
 
 // --- Directory Selection & Helpers ---
@@ -168,3 +196,56 @@ function triggerScan(path) {
     target: "#main-content",
   });
 }
+
+// --- Theme Toggle ---
+
+window.initTheme = function() {
+  const theme = localStorage.getItem("dub-theme") || "system";
+  applyTheme(theme);
+
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", () => {
+      const current = localStorage.getItem("dub-theme") || "system";
+      if (current === "system") applyTheme("system");
+    });
+};
+
+window.setTheme = function(mode) {
+  localStorage.setItem("dub-theme", mode);
+  applyTheme(mode);
+  updateThemeButton(mode);
+};
+
+function applyTheme(mode) {
+  const isDark =
+    mode === "dark" ||
+    (mode === "system" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches);
+  if (isDark) {
+    document.documentElement.classList.add("dark");
+  } else {
+    document.documentElement.classList.remove("dark");
+  }
+}
+
+window.cycleTheme = function() {
+  const current = localStorage.getItem("dub-theme") || "system";
+  const order = ["system", "light", "dark"];
+  const next = order[(order.indexOf(current) + 1) % order.length];
+  window.setTheme(next);
+};
+
+function updateThemeButton(mode) {
+  const btn = document.getElementById("theme-toggle");
+  if (!btn) return;
+  const icons = { system: "\u{1F4BB}", light: "\u2600\uFE0F", dark: "\u{1F319}" };
+  const labels = { system: "System", light: "Light", dark: "Dark" };
+  btn.textContent = icons[mode] || icons.system;
+  btn.title = "Theme: " + (labels[mode] || "System");
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  window.initTheme();
+  updateThemeButton(localStorage.getItem("dub-theme") || "system");
+});
