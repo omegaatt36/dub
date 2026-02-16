@@ -29,3 +29,7 @@ func (f *OSFileSystem) Stat(path string) (os.FileInfo, error) {
 func (f *OSFileSystem) Rename(oldpath, newpath string) error {
 	return os.Rename(oldpath, newpath)
 }
+
+func (f *OSFileSystem) ReadFile(path string) ([]byte, error) {
+	return os.ReadFile(path)
+}

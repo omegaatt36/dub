@@ -45,9 +45,10 @@ func (m *mockFileInfo) IsDir() bool        { return false }
 func (m *mockFileInfo) Sys() any           { return nil }
 
 type mockFS struct {
-	ReadDirFunc func(string) ([]os.DirEntry, error)
-	StatFunc    func(string) (os.FileInfo, error)
-	RenameFunc  func(string, string) error
+	ReadDirFunc  func(string) ([]os.DirEntry, error)
+	StatFunc     func(string) (os.FileInfo, error)
+	RenameFunc   func(string, string) error
+	ReadFileFunc func(string) ([]byte, error)
 }
 
 func (m *mockFS) ReadDir(path string) ([]os.DirEntry, error) {
@@ -69,6 +70,13 @@ func (m *mockFS) Rename(old, new string) error {
 		return m.RenameFunc(old, new)
 	}
 	return nil
+}
+
+func (m *mockFS) ReadFile(path string) ([]byte, error) {
+	if m.ReadFileFunc != nil {
+		return m.ReadFileFunc(path)
+	}
+	return nil, nil
 }
 
 type mockPM struct {
@@ -98,9 +106,13 @@ func newTestApp() *App {
 				&mockDirEntry{name: "file2.txt", info: &mockFileInfo{name: "file2.txt", size: 200}},
 			}, nil
 		},
+		StatFunc: func(path string) (os.FileInfo, error) {
+			return nil, os.ErrNotExist
+		},
 	}
 	mpm := &mockPM{}
 	return NewApp(
+		mfs,
 		service.NewScannerService(mfs),
 		service.NewPatternService(mpm),
 		service.NewRenamerService(mfs),
@@ -244,6 +256,7 @@ func TestHandleExecute(t *testing.T) {
 	}
 	mpm := &mockPM{}
 	app := NewApp(
+		mfs,
 		service.NewScannerService(mfs),
 		service.NewPatternService(mpm),
 		service.NewRenamerService(mfs),
@@ -366,6 +379,7 @@ func TestHandleExecuteLogsResult(t *testing.T) {
 	}
 	mpm := &mockPM{}
 	app := NewApp(
+		mfs,
 		service.NewScannerService(mfs),
 		service.NewPatternService(mpm),
 		service.NewRenamerService(mfs),
@@ -407,6 +421,7 @@ func TestHandleUndo(t *testing.T) {
 	}
 	mpm := &mockPM{}
 	app := NewApp(
+		mfs,
 		service.NewScannerService(mfs),
 		service.NewPatternService(mpm),
 		service.NewRenamerService(mfs),

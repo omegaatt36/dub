@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -75,7 +74,7 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// If path is a file, use its parent directory
-	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+	if info, err := a.fs.Stat(path); err == nil && !info.IsDir() {
 		path = filepath.Dir(path)
 	}
 
@@ -208,7 +207,7 @@ func (a *App) handleNamesLoad(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := a.fs.ReadFile(path)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Failed to read file: %v", err)
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))

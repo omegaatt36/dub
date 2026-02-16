@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 func TestHandleScan_WithServiceMock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
+	fs := mock.NewMockFileSystem(ctrl)
 	scanner := mock.NewMockScanner(ctrl)
 	pattern := mock.NewMockPatternFilter(ctrl)
 	renamer := mock.NewMockRenamer(ctrl)
@@ -27,9 +29,10 @@ func TestHandleScan_WithServiceMock(t *testing.T) {
 		{Name: "file2.txt", Path: "/test/dir/file2.txt", Extension: ".txt", Size: 200},
 	}
 
+	fs.EXPECT().Stat("/test/dir").Return(nil, os.ErrNotExist)
 	scanner.EXPECT().Scan("/test/dir").Return(expectedFiles, nil)
 
-	app := NewApp(scanner, pattern, renamer)
+	app := NewApp(fs, scanner, pattern, renamer)
 	handler := app.GetHandler()
 
 	form := url.Values{"path": {"/test/dir"}}
@@ -46,6 +49,7 @@ func TestHandleScan_WithServiceMock(t *testing.T) {
 func TestHandlePattern_WithServiceMock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
+	fs := mock.NewMockFileSystem(ctrl)
 	scanner := mock.NewMockScanner(ctrl)
 	patternSvc := mock.NewMockPatternFilter(ctrl)
 	renamer := mock.NewMockRenamer(ctrl)
@@ -62,7 +66,7 @@ func TestHandlePattern_WithServiceMock(t *testing.T) {
 
 	patternSvc.EXPECT().MatchFiles(allFiles, "file").Return(matchedFiles, nil)
 
-	app := NewApp(scanner, patternSvc, renamer)
+	app := NewApp(fs, scanner, patternSvc, renamer)
 	app.state.AllFiles = allFiles
 
 	handler := app.GetHandler()
@@ -80,6 +84,7 @@ func TestHandlePattern_WithServiceMock(t *testing.T) {
 func TestHandlePreview_WithServiceMock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
+	fs := mock.NewMockFileSystem(ctrl)
 	scanner := mock.NewMockScanner(ctrl)
 	patternSvc := mock.NewMockPatternFilter(ctrl)
 	renamer := mock.NewMockRenamer(ctrl)
@@ -94,7 +99,7 @@ func TestHandlePreview_WithServiceMock(t *testing.T) {
 
 	renamer.EXPECT().PreviewRename(files, names).Return(expectedPreviews, nil)
 
-	app := NewApp(scanner, patternSvc, renamer)
+	app := NewApp(fs, scanner, patternSvc, renamer)
 	app.state.AllFiles = files
 	app.state.MatchedFiles = files
 	app.state.NewNames = names
@@ -114,6 +119,7 @@ func TestHandlePreview_WithServiceMock(t *testing.T) {
 func TestHandleExecute_WithServiceMock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 
+	fs := mock.NewMockFileSystem(ctrl)
 	scanner := mock.NewMockScanner(ctrl)
 	patternSvc := mock.NewMockPatternFilter(ctrl)
 	renamer := mock.NewMockRenamer(ctrl)
@@ -129,7 +135,7 @@ func TestHandleExecute_WithServiceMock(t *testing.T) {
 	}
 	scanner.EXPECT().Scan("/dir").Return(refreshedFiles, nil)
 
-	app := NewApp(scanner, patternSvc, renamer)
+	app := NewApp(fs, scanner, patternSvc, renamer)
 	app.state.SelectedDirectory = "/dir"
 	app.state.AllFiles = []domain.FileItem{
 		{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},

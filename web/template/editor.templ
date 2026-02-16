@@ -12,12 +12,14 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 		</div>
 		<div class="p-4 flex flex-col h-full overflow-hidden">
 			<!-- Naming method tabs (Segmented Control) -->
-			<div class="flex p-1 mb-4 bg-gray-100 dark:bg-gray-900/80 rounded-lg border border-gray-200 dark:border-gray-700/50">
+			<div class="flex p-1 mb-4 bg-gray-100 dark:bg-gray-900/80 rounded-lg border border-gray-200 dark:border-gray-700/50" role="tablist" aria-label="Naming method">
 				<button
 					type="button"
 					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
 						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "manual"),
 						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "manual") }
+					role="tab"
+					aria-selected={ boolStr(method == "manual") }
 					hx-post="/api/names"
 					hx-vals='{"method": "manual"}'
 					hx-target="#names-editor"
@@ -30,6 +32,8 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
 						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "file"),
 						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "file") }
+					role="tab"
+					aria-selected={ boolStr(method == "file") }
 					hx-post="/api/names"
 					hx-vals='{"method": "file"}'
 					hx-target="#names-editor"
@@ -42,6 +46,8 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
 						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "template"),
 						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "template") }
+					role="tab"
+					aria-selected={ boolStr(method == "template") }
 					hx-post="/api/names"
 					hx-vals='{"method": "template"}'
 					hx-target="#names-editor"
@@ -194,4 +200,11 @@ func getName(names []string, index int) string {
 		return names[index]
 	}
 	return ""
+}
+
+func boolStr(b bool) string {
+	if b {
+		return "true"
+	}
+	return "false"
 }

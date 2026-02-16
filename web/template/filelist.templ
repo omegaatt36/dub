@@ -6,7 +6,7 @@ import (
 )
 
 templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPattern bool) {
-	<div id="file-list" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full overflow-hidden shadow-sm">
+	<div id="file-list" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full overflow-hidden shadow-sm" style="--wails-drop-target: drop;">
 		<div class="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0 flex justify-between items-center">
 			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200 tracking-wide">
 				if hasPattern {
@@ -28,7 +28,7 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 					}
 				</div>
 			} else if len(previews) > 0 {
-				<table class="w-full text-sm text-left border-collapse">
+				<table class="w-full text-sm text-left border-collapse" aria-label="Rename preview">
 					<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
 						<tr>
 							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Original</th>
@@ -39,14 +39,23 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 					</thead>
 					<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
 						for i, p := range previews {
-							<tr class={ "group transition-colors duration-150 hover:bg-gray-100/50 dark:hover:bg-gray-700/50",
+							<tr
+								class={ "group transition-colors duration-150 hover:bg-gray-100/50 dark:hover:bg-gray-700/50",
 								templ.KV("bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20", p.Conflict),
 								templ.KV("bg-white dark:bg-gray-800", !p.Conflict && i % 2 == 0),
-								templ.KV("bg-gray-50 dark:bg-gray-800/50", !p.Conflict && i % 2 != 0) }>
+								templ.KV("bg-gray-50 dark:bg-gray-800/50", !p.Conflict && i % 2 != 0) }
+								if p.Conflict {
+									aria-label="Conflict: duplicate filename"
+								}
+							>
 								<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100">
 									<div class="flex items-center gap-2.5">
 										@FileIcon(domain.FileTypeIcon(files[i].Extension))
-										<span class="truncate" title={ p.OriginalName }>{ p.OriginalName }</span>
+										if len(p.OriginalDiff) > 0 {
+											@DiffSegments(p.OriginalDiff)
+										} else {
+											<span class="truncate" title={ p.OriginalName }>{ p.OriginalName }</span>
+										}
 									</div>
 								</td>
 								<td class="px-2 py-2.5 text-center">
@@ -61,6 +70,8 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 								<td class="px-4 py-2.5 max-w-xs truncate">
 									if p.Conflict {
 										<span class="text-red-600 dark:text-red-400 font-medium" title="Conflict">{ p.NewName }</span>
+									} else if len(p.NewDiff) > 0 {
+										@DiffSegments(p.NewDiff)
 									} else if p.OriginalName != p.NewName {
 										<span class="text-emerald-600 dark:text-emerald-400 font-medium">{ p.NewName }</span>
 									} else {
@@ -75,7 +86,7 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 					</tbody>
 				</table>
 			} else {
-				<table class="w-full text-sm text-left border-collapse">
+				<table class="w-full text-sm text-left border-collapse" aria-label="File list">
 					<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
 						<tr>
 							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Name</th>
@@ -103,4 +114,17 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 			}
 		</div>
 	</div>
+}
+
+templ DiffSegments(segments []domain.DiffSegment) {
+	for _, seg := range segments {
+		switch seg.Type {
+			case domain.DiffEqual:
+				<span>{ seg.Text }</span>
+			case domain.DiffDelete:
+				<span class="bg-red-200 dark:bg-red-900/40 text-red-500 dark:text-red-400 line-through rounded-sm px-0.5">{ seg.Text }</span>
+			case domain.DiffInsert:
+				<span class="bg-emerald-200 dark:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 rounded-sm px-0.5">{ seg.Text }</span>
+		}
+	}
 }

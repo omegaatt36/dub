@@ -22,7 +22,7 @@ templ AppContent(data PageData) {
 	<div class="h-screen flex flex-col">
 		<!-- Header -->
 		<div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
-			<img src="/static/images/logo.svg" alt="Dub Logo" class="w-10 h-10 hover:scale-110 transition-transform duration-300" />
+			<img src="/static/images/logo.svg" alt="Dub Logo" class="w-10 h-10 hover:scale-110 transition-transform duration-300"/>
 			<div>
 				<h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight">Dub</h1>
 				<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">Batch File Renamer</p>
@@ -31,11 +31,11 @@ templ AppContent(data PageData) {
 				<button
 					id="theme-toggle"
 					type="button"
-					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-lg"
+					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-lg focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-gray-800"
 					onclick="cycleTheme()"
 					title="Theme: System"
-				>
-				</button>
+					aria-label="Toggle theme"
+				></button>
 			</div>
 		</div>
 		<!-- Main content -->
@@ -47,7 +47,7 @@ templ AppContent(data PageData) {
 
 templ MainContent(data PageData) {
 	@ErrorBanner(data.Error)
-	<div class="h-full grid grid-cols-2 gap-4 p-4" style="--wails-drop-target: drop;">
+	<div class="h-full grid grid-cols-2 gap-4 p-4">
 		<!-- Left column: Directory + File List -->
 		<div class="flex flex-col gap-4 min-h-0">
 			@DirectorySelector(data.SelectedDirectory)

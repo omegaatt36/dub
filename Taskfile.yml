@@ -6,8 +6,21 @@ tasks:
     cmds:
       - templ generate
 
+  css:
+    desc: Build Tailwind CSS
+    cmds:
+      - ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --minify
+    sources:
+      - web/static/css/input.css
+      - tailwind.config.js
+      - web/template/**/*.templ
+      - web/index.html
+    generates:
+      - web/static/css/app.css
+
   frontend-prep:
     desc: Prepare frontend assets
+    deps: [css]
     cmds:
       - mkdir -p frontend/dist
       - cp web/index.html frontend/dist/
@@ -17,7 +30,7 @@ tasks:
     desc: Run development server
     deps: [generate, frontend-prep]
     cmds:
-      - templ generate -watch & wails dev
+      - templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev
 
   test:
     desc: Run tests

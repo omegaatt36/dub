@@ -56,6 +56,21 @@ func (mr *MockFileSystemMockRecorder) ReadDir(path any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockFileSystem)(nil).ReadDir), path)
 }
 
+// ReadFile mocks base method.
+func (m *MockFileSystem) ReadFile(path string) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadFile", path)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadFile indicates an expected call of ReadFile.
+func (mr *MockFileSystemMockRecorder) ReadFile(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadFile", reflect.TypeOf((*MockFileSystem)(nil).ReadFile), path)
+}
+
 // Rename mocks base method.
 func (m *MockFileSystem) Rename(oldpath, newpath string) error {
 	m.ctrl.T.Helper()

@@ -1,0 +1,55 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* HTMX loading indicator */
+.htmx-indicator {
+    opacity: 0;
+    transition: opacity 200ms ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+/* Direction RTL for path truncation (show end of path) */
+.dir-rtl {
+    direction: rtl;
+    text-align: left;
+    unicode-bidi: plaintext;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(107, 114, 128, 0.3);
+    border-radius: 3px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.8);
+}
+
+/* Wails drag & drop target highlight — only on file list and upload area */
+#file-list.wails-drop-target-active,
+[data-drop-names].wails-drop-target-active {
+    outline: 3px dashed #4385be;
+    outline-offset: -3px;
+    background-color: rgba(67, 133, 190, 0.05);
+}

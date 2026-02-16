@@ -105,6 +105,59 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		_, err := svc.PreviewRename(files, names)
 		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
 	})
+
+	t.Run("computes diff segments for changed names", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "photo_001.txt", Path: "/dir/photo_001.txt", Extension: ".txt"},
+		}
+		names := []string{"vacation_001"}
+
+		previews, err := svc.PreviewRename(files, names)
+		require.NoError(t, err)
+		require.NotNil(t, previews[0].OriginalDiff)
+		require.NotNil(t, previews[0].NewDiff)
+
+		// Verify reconstructed text is correct
+		var origText, newText string
+		for _, seg := range previews[0].OriginalDiff {
+			origText += seg.Text
+		}
+		for _, seg := range previews[0].NewDiff {
+			newText += seg.Text
+		}
+		assert.Equal(t, "photo_001.txt", origText)
+		assert.Equal(t, "vacation_001.txt", newText)
+
+		// Should have delete segments in original
+		hasDelete := false
+		for _, seg := range previews[0].OriginalDiff {
+			if seg.Type == domain.DiffDelete {
+				hasDelete = true
+			}
+		}
+		assert.True(t, hasDelete, "should have delete segments")
+
+		// Should have insert segments in new
+		hasInsert := false
+		for _, seg := range previews[0].NewDiff {
+			if seg.Type == domain.DiffInsert {
+				hasInsert = true
+			}
+		}
+		assert.True(t, hasInsert, "should have insert segments")
+	})
+
+	t.Run("no diff for unchanged names", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "keep.txt", Path: "/dir/keep.txt", Extension: ".txt"},
+		}
+		names := []string{""}
+
+		previews, err := svc.PreviewRename(files, names)
+		require.NoError(t, err)
+		assert.Nil(t, previews[0].OriginalDiff, "unchanged name should have no diff")
+		assert.Nil(t, previews[0].NewDiff, "unchanged name should have no diff")
+	})
 }
 
 func TestRenamerService_ExecuteRename(t *testing.T) {

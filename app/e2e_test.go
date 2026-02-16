@@ -36,6 +36,7 @@ func TestE2E_FullRenameFlow(t *testing.T) {
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
 	app := NewApp(
+		realFS,
 		service.NewScannerService(realFS),
 		service.NewPatternService(realPM),
 		service.NewRenamerService(realFS),
@@ -169,6 +170,7 @@ func TestE2E_TemplateRenameFlow(t *testing.T) {
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
 	app := NewApp(
+		realFS,
 		service.NewScannerService(realFS),
 		service.NewPatternService(realPM),
 		service.NewRenamerService(realFS),
@@ -233,6 +235,7 @@ func TestE2E_AlphaPatternExcludesNumeric(t *testing.T) {
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
 	app := NewApp(
+		realFS,
 		service.NewScannerService(realFS),
 		service.NewPatternService(realPM),
 		service.NewRenamerService(realFS),
@@ -275,6 +278,7 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
 	app := NewApp(
+		realFS,
 		service.NewScannerService(realFS),
 		service.NewPatternService(realPM),
 		service.NewRenamerService(realFS),
@@ -336,6 +340,7 @@ func TestE2E_UndoRename(t *testing.T) {
 	realFS := &adapterfs.OSFileSystem{}
 	realPM := &regex.Engine{}
 	app := NewApp(
+		realFS,
 		service.NewScannerService(realFS),
 		service.NewPatternService(realPM),
 		service.NewRenamerService(realFS),

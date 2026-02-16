@@ -13,6 +13,7 @@ type FileSystem interface {
 	ReadDir(path string) ([]os.DirEntry, error)
 	Stat(path string) (os.FileInfo, error)
 	Rename(oldpath, newpath string) error
+	ReadFile(path string) ([]byte, error)
 }
 
 // PatternMatcher abstracts pattern matching for testability.
