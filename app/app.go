@@ -2,12 +2,23 @@ package app
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/omegaatt36/dub/internal/port"
 )
+
+// Option configures the App.
+type Option func(*App)
+
+// WithLogger sets a custom logger for the App.
+func WithLogger(logger *slog.Logger) Option {
+	return func(a *App) {
+		a.logger = logger
+	}
+}
 
 // App is the main application struct that composes all services.
 type App struct {
@@ -16,16 +27,22 @@ type App struct {
 	renamer port.Renamer
 	state   *AppState
 	ctx     context.Context
+	logger  *slog.Logger
 }
 
 // NewApp creates a new App with injected service dependencies.
-func NewApp(scanner port.Scanner, pattern port.PatternFilter, renamer port.Renamer) *App {
-	return &App{
+func NewApp(scanner port.Scanner, pattern port.PatternFilter, renamer port.Renamer, opts ...Option) *App {
+	a := &App{
 		scanner: scanner,
 		pattern: pattern,
 		renamer: renamer,
 		state:   NewAppState(),
+		logger:  slog.Default(),
 	}
+	for _, opt := range opts {
+		opt(a)
+	}
+	return a
 }
 
 // GetHandler returns the Chi HTTP handler for the asset server.

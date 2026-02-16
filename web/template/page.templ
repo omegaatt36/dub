@@ -13,6 +13,7 @@ type PageData struct {
 	NamingMethod      string
 	Template          string
 	Result            *domain.RenameResult
+	CanUndo           bool
 }
 
 // AppContent renders the app UI without the HTML shell.
@@ -20,11 +21,21 @@ type PageData struct {
 templ AppContent(data PageData) {
 	<div class="h-screen flex flex-col">
 		<!-- Header -->
-		<div class="bg-gray-800 border-b border-gray-700 px-6 py-3 flex items-center gap-3">
+		<div class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-6 py-3 flex items-center gap-3">
 			<img src="/static/images/logo.svg" alt="Dub Logo" class="w-10 h-10 hover:scale-110 transition-transform duration-300" />
 			<div>
-				<h1 class="text-lg font-semibold text-gray-100 leading-none tracking-tight">Dub</h1>
-				<p class="text-xs text-gray-400 mt-0.5 font-medium">Batch File Renamer</p>
+				<h1 class="text-lg font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight">Dub</h1>
+				<p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 font-medium">Batch File Renamer</p>
+			</div>
+			<div class="ml-auto">
+				<button
+					id="theme-toggle"
+					type="button"
+					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-lg"
+					onclick="cycleTheme()"
+					title="Theme: System"
+				>
+				</button>
 			</div>
 		</div>
 		<!-- Main content -->
@@ -36,7 +47,7 @@ templ AppContent(data PageData) {
 
 templ MainContent(data PageData) {
 	@ErrorBanner(data.Error)
-	<div class="h-full grid grid-cols-2 gap-4 p-4">
+	<div class="h-full grid grid-cols-2 gap-4 p-4" style="--wails-drop-target: drop;">
 		<!-- Left column: Directory + File List -->
 		<div class="flex flex-col gap-4 min-h-0">
 			@DirectorySelector(data.SelectedDirectory)
@@ -50,7 +61,7 @@ templ MainContent(data PageData) {
 			<div class="flex-1 min-h-0 overflow-auto">
 				@NamesEditor(displayFiles(data), data.NewNames, data.NamingMethod, data.Template)
 			</div>
-			@Actions(len(displayFiles(data)) > 0, len(data.NewNames) > 0, len(data.Previews) > 0, data.Result)
+			@Actions(len(displayFiles(data)) > 0, len(data.NewNames) > 0, len(data.Previews) > 0, data.Result, data.CanUndo)
 		</div>
 	</div>
 }

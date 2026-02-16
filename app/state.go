@@ -14,6 +14,8 @@ type AppState struct {
 	Error             string
 	NamingMethod      string // "manual" | "file" | "template"
 	Template          string
+	LastRenameHistory []domain.RenamePreview
+	CanUndo           bool
 }
 
 func NewAppState() *AppState {
@@ -31,6 +33,8 @@ func (s *AppState) ResetForDirectory() {
 	s.NewNames = nil
 	s.Previews = nil
 	s.Error = ""
+	s.CanUndo = false
+	s.LastRenameHistory = nil
 }
 
 // ResetForPattern clears match-dependent state when pattern changes.

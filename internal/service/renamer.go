@@ -18,6 +18,16 @@ func NewRenamerService(fs port.FileSystem) *RenamerService {
 	return &RenamerService{fs: fs}
 }
 
+// validateFileName checks for invalid characters in filenames.
+func validateFileName(name string) error {
+	if strings.Contains(name, "..") ||
+		strings.Contains(name, "/") ||
+		strings.Contains(name, "\\") {
+		return domain.ErrInvalidFileName
+	}
+	return nil
+}
+
 // PreviewRename generates rename previews from matched files and new names.
 // It appends the original file extension to each new name and detects conflicts.
 func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []string) ([]domain.RenamePreview, error) {
@@ -32,6 +42,12 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 			newName = f.Name
 		} else if f.Extension != "" && !strings.HasSuffix(strings.ToLower(newName), strings.ToLower(f.Extension)) {
 			newName = newName + f.Extension
+		}
+
+		if newName != f.Name {
+			if err := validateFileName(newName); err != nil {
+				return nil, fmt.Errorf("invalid name %q: %w", newName, err)
+			}
 		}
 
 		dir := filepath.Dir(f.Path)

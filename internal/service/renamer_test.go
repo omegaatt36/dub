@@ -75,6 +75,36 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "keep.txt", previews[0].NewName, "empty name should keep original")
 	})
+
+	t.Run("rejects path traversal in new names", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},
+		}
+		names := []string{"../evil"}
+
+		_, err := svc.PreviewRename(files, names)
+		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
+	})
+
+	t.Run("rejects slash in new names", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},
+		}
+		names := []string{"sub/file"}
+
+		_, err := svc.PreviewRename(files, names)
+		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
+	})
+
+	t.Run("rejects backslash in new names", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},
+		}
+		names := []string{"sub\\file"}
+
+		_, err := svc.PreviewRename(files, names)
+		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
+	})
 }
 
 func TestRenamerService_ExecuteRename(t *testing.T) {

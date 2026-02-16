@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -26,6 +28,8 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/names/upload", a.handleNamesUpload)
 	mux.HandleFunc("POST /api/preview", a.handlePreview)
 	mux.HandleFunc("POST /api/execute", a.handleExecute)
+	mux.HandleFunc("POST /api/undo", a.handleUndo)
+	mux.HandleFunc("POST /api/names/load", a.handleNamesLoad)
 
 	return mux
 }
@@ -70,6 +74,11 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// If path is a file, use its parent directory
+	if info, err := os.Stat(path); err == nil && !info.IsDir() {
+		path = filepath.Dir(path)
+	}
+
 	a.state.SelectedDirectory = path
 	a.state.ResetForDirectory()
 
@@ -83,6 +92,7 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	a.state.AllFiles = files
 	a.state.MatchedFiles = files
 	a.state.Error = ""
+	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
@@ -189,6 +199,38 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
+// handleNamesLoad reads a names file by path (for drag & drop).
+func (a *App) handleNamesLoad(w http.ResponseWriter, r *http.Request) {
+	path := r.FormValue("path")
+	if path == "" {
+		a.state.Error = "No file path provided"
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	content, err := os.ReadFile(path)
+	if err != nil {
+		a.state.Error = fmt.Sprintf("Failed to read file: %v", err)
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	var names []string
+	scanner := bufio.NewScanner(strings.NewReader(string(content)))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line != "" {
+			names = append(names, line)
+		}
+	}
+
+	a.state.NewNames = names
+	a.state.NamingMethod = "file"
+	a.state.ClearPreviews()
+
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
 func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {
 	if r.FormValue("clear") == "true" {
 		a.state.ClearPreviews()
@@ -218,9 +260,54 @@ func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := a.renamer.ExecuteRename(a.state.Previews)
+
+	// Save undo history before resetting state
+	if result.Success {
+		a.state.LastRenameHistory = make([]domain.RenamePreview, len(a.state.Previews))
+		copy(a.state.LastRenameHistory, a.state.Previews)
+		a.state.CanUndo = true
+	}
+
+	a.logger.Info("rename executed", "renamed_count", result.RenamedCount, "error_count", len(result.Errors))
 	a.state.ResetForExecute()
 
 	// Re-scan the directory to refresh file list
+	if a.state.SelectedDirectory != "" {
+		files, err := a.scanner.Scan(a.state.SelectedDirectory)
+		if err == nil {
+			a.state.AllFiles = files
+			a.state.MatchedFiles = files
+		}
+	}
+
+	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
+}
+
+func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
+	if !a.state.CanUndo || len(a.state.LastRenameHistory) == 0 {
+		a.state.Error = "Nothing to undo"
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	// Build reversed previews: swap Original <-> New
+	reversed := make([]domain.RenamePreview, len(a.state.LastRenameHistory))
+	for i, p := range a.state.LastRenameHistory {
+		reversed[i] = domain.RenamePreview{
+			OriginalName: p.NewName,
+			NewName:      p.OriginalName,
+			OriginalPath: p.NewPath,
+			NewPath:      p.OriginalPath,
+		}
+	}
+
+	result := a.renamer.ExecuteRename(reversed)
+	a.state.CanUndo = false
+	a.state.LastRenameHistory = nil
+
+	a.logger.Info("undo executed", "restored_count", result.RenamedCount, "error_count", len(result.Errors))
+
+	// Re-scan directory
 	if a.state.SelectedDirectory != "" {
 		files, err := a.scanner.Scan(a.state.SelectedDirectory)
 		if err == nil {
@@ -243,6 +330,7 @@ func (a *App) buildPageData(result interface{}) template.PageData {
 		Error:             a.state.Error,
 		NamingMethod:      a.state.NamingMethod,
 		Template:          a.state.Template,
+		CanUndo:           a.state.CanUndo,
 	}
 	if r, ok := result.(*domain.RenameResult); ok {
 		data.Result = r

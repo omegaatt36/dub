@@ -13,6 +13,9 @@
 
 /* Conflict highlight */
 .conflict {
+    background-color: rgba(239, 68, 68, 0.1);
+}
+.dark .conflict {
     background-color: rgba(239, 68, 68, 0.15);
 }
 
@@ -45,10 +48,25 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    background: rgba(156, 163, 175, 0.5);
+    background: rgba(107, 114, 128, 0.3);
     border-radius: 3px;
 }
 
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(156, 163, 175, 0.5);
+}
+
 ::-webkit-scrollbar-thumb:hover {
+    background: rgba(107, 114, 128, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
     background: rgba(107, 114, 128, 0.8);
+}
+
+/* Wails drag & drop target highlight */
+.wails-drop-target-active {
+    outline: 3px dashed #4385BE;
+    outline-offset: -3px;
+    background-color: rgba(67, 133, 190, 0.05);
 }

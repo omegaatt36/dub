@@ -3,20 +3,20 @@ package template
 import "fmt"
 
 templ PatternInput(pattern string, totalCount, matchedCount int) {
-	<div class="bg-gray-800 rounded-lg p-4 border border-gray-700 shadow-sm">
+	<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
 		<div class="flex justify-between items-start mb-2">
-			<label class="block text-sm font-medium text-gray-200">Filter Pattern</label>
+			<label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Filter Pattern</label>
 			if totalCount > 0 {
-				<div class="text-xs text-gray-400 bg-gray-900/50 px-2 py-1 rounded border border-gray-700/50">
-					<span class="text-gray-300 font-medium">{ fmt.Sprintf("%d", matchedCount) }</span>
-					<span class="text-gray-600 mx-1">/</span>
+				<div class="text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-900/50 px-2 py-1 rounded border border-gray-200 dark:border-gray-700/50">
+					<span class="text-gray-900 dark:text-gray-300 font-medium">{ fmt.Sprintf("%d", matchedCount) }</span>
+					<span class="text-gray-400 dark:text-gray-600 mx-1">/</span>
 					<span>{ fmt.Sprintf("%d", totalCount) }</span> matches
 				</div>
 			}
 		</div>
 		<div class="relative group">
 			<div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-				<svg class="h-4 w-4 text-gray-500 group-focus-within:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+				<svg class="h-4 w-4 text-gray-400 dark:text-gray-500 group-focus-within:text-blue-600 dark:group-focus-within:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
 				</svg>
 			</div>
@@ -27,7 +27,7 @@ templ PatternInput(pattern string, totalCount, matchedCount int) {
 				data-event="pattern-changed"
 				value={ pattern }
 				placeholder="Regex pattern (e.g. ^file_\d+)"
-				class="block w-full pl-10 bg-gray-900 border border-gray-600 text-gray-100 rounded-md px-3 py-2.5 text-sm placeholder-gray-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all shadow-inner"
+				class="block w-full pl-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2.5 text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
 				hx-post="/api/pattern"
 				hx-trigger="pattern-changed delay:200ms"
 				hx-target="#main-content"
@@ -36,30 +36,30 @@ templ PatternInput(pattern string, totalCount, matchedCount int) {
 				autocomplete="off"
 			/>
 		</div>
-		<p class="text-xs text-gray-500 mt-1.5 ml-1">Matches against filename (without extension)</p>
+		<p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 ml-1">Matches against filename (without extension)</p>
 		<div class="flex items-center gap-2 mt-3 flex-wrap">
-			<span class="text-xs text-gray-500 font-medium mr-1">Insert:</span>
+			<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mr-1">Insert:</span>
 			<button
 				type="button"
-				class="text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
+				class="text-xs bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 dark:text-blue-300 border border-blue-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
 				onclick="appendShortcut('[serial]')"
 				title="Digits: (\d+)"
 			>[serial]</button>
 			<button
 				type="button"
-				class="text-xs bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border border-purple-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
+				class="text-xs bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border border-purple-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
 				onclick="appendShortcut('[word]')"
 				title="Word chars: (\w+)"
 			>[word]</button>
 			<button
 				type="button"
-				class="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
+				class="text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
 				onclick="appendShortcut('[any]')"
 				title="Anything: (.*)"
 			>[any]</button>
 			<button
 				type="button"
-				class="text-xs bg-green-500/10 hover:bg-green-500/20 text-green-300 border border-green-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
+				class="text-xs bg-green-500/10 hover:bg-green-500/20 text-green-600 dark:text-green-300 border border-green-500/20 px-2.5 py-1 rounded-full transition-colors font-mono"
 				onclick="appendShortcut('[alpha]')"
 				title="Letters only: ([a-zA-Z]+)"
 			>[alpha]</button>

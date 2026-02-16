@@ -9,7 +9,17 @@ templ Layout() {
 			<title>Dub - Batch File Renamer</title>
 			<script src="https://cdn.tailwindcss.com"></script>
 			<script>
+				(function() {
+					var theme = localStorage.getItem('dub-theme') || 'system';
+					var isDark = theme === 'dark' ||
+						(theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+					if (isDark) document.documentElement.classList.add('dark');
+					else document.documentElement.classList.remove('dark');
+				})();
+			</script>
+			<script>
 				tailwind.config = {
+					darkMode: 'class',
 					theme: {
 						extend: {
 							colors: {
@@ -50,7 +60,7 @@ templ Layout() {
 			<script src="/static/js/bridge.js"></script>
 			<link rel="stylesheet" href="/static/css/app.css"/>
 		</head>
-		<body class="bg-gray-900 text-gray-100 min-h-screen">
+		<body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
 			{ children... }
 		</body>
 	</html>
