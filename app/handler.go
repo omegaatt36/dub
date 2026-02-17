@@ -37,11 +37,17 @@ func (a *App) newRouter() http.Handler {
 // handlePage returns the inner page content (no HTML shell).
 // index.html is the shell; this endpoint provides the dynamic body.
 func (a *App) handlePage(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	data := a.buildPageData(nil)
 	renderTempl(w, r, template.AppContent(data))
 }
 
 func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	path, err := a.OpenDirectoryDialog()
 	if err != nil || path == "" {
 		// User cancelled the dialog or error — return current state unchanged
@@ -67,6 +73,9 @@ func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	path := r.FormValue("path")
 	if path == "" {
 		a.state.Error = "No directory path provided"
@@ -98,6 +107,9 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handlePattern(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	pattern := r.FormValue("pattern")
 	a.state.Pattern = pattern
 	a.state.ResetForPattern()
@@ -120,6 +132,9 @@ func (a *App) handlePattern(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	method := r.FormValue("method")
 	if method != "" {
 		a.state.NamingMethod = method
@@ -134,7 +149,7 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 			names[i] = r.FormValue(fmt.Sprintf("name_%d", i))
 		}
 		a.state.NewNames = names
-		a.state.ClearPreviews()
+		a.autoPreview()
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
@@ -144,6 +159,9 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	tmpl := r.FormValue("template")
 	if tmpl == "" {
 		tmpl = "name_{index}"
@@ -157,12 +175,15 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	a.state.NewNames = names
 	a.state.NamingMethod = "template"
-	a.state.ClearPreviews()
+	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	search := r.FormValue("search")
 	replace := r.FormValue("replace")
 
@@ -179,13 +200,16 @@ func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.state.NewNames = names
-	a.state.ClearPreviews()
 	a.state.Error = ""
+	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	file, _, err := r.FormFile("namesfile")
 	if err != nil {
 		a.state.Error = "Failed to read uploaded file"
@@ -214,13 +238,16 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 
 	a.state.NewNames = names
 	a.state.NamingMethod = "file"
-	a.state.ClearPreviews()
+	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 // handleNamesLoad reads a names file by path (for drag & drop).
 func (a *App) handleNamesLoad(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	path := r.FormValue("path")
 	if path == "" {
 		a.state.Error = "No file path provided"
@@ -246,13 +273,17 @@ func (a *App) handleNamesLoad(w http.ResponseWriter, r *http.Request) {
 
 	a.state.NewNames = names
 	a.state.NamingMethod = "file"
-	a.state.ClearPreviews()
+	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	if r.FormValue("clear") == "true" {
+		a.state.NewNames = nil
 		a.state.ClearPreviews()
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
@@ -273,6 +304,9 @@ func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	if len(a.state.Previews) == 0 {
 		a.state.Error = "No previews to execute"
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -304,6 +338,9 @@ func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
 	if !a.state.CanUndo || len(a.state.LastRenameHistory) == 0 {
 		a.state.Error = "Nothing to undo"
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -337,6 +374,24 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
+}
+
+// autoPreview generates previews automatically when names are available.
+func (a *App) autoPreview() {
+	files := a.displayFiles()
+	if len(a.state.NewNames) == 0 || len(files) == 0 {
+		a.state.Previews = nil
+		return
+	}
+
+	previews, err := a.renamer.PreviewRename(files, a.state.NewNames)
+	if err != nil {
+		a.state.Error = fmt.Sprintf("Preview failed: %v", err)
+		a.state.Previews = nil
+		return
+	}
+
+	a.state.Previews = previews
 }
 
 func (a *App) buildPageData(result interface{}) template.PageData {

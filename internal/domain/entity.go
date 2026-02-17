@@ -24,10 +24,12 @@ type RenamePreview struct {
 }
 
 type RenameResult struct {
-	Success      bool
-	Message      string
-	RenamedCount int
-	Errors       []string
+	Success        bool
+	Message        string
+	RenamedCount   int
+	Errors         []string
+	RolledBack     bool
+	RollbackErrors []string
 }
 
 // FormatFileSize formats a file size in bytes to a human-readable string.

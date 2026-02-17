@@ -82,10 +82,10 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 	return previews, nil
 }
 
-// ExecuteRename performs the actual file renames. It skips conflicting entries.
+// ExecuteRename performs the actual file renames with rollback on failure.
+// If any rename fails, all previously completed renames are reversed.
 func (s *RenamerService) ExecuteRename(previews []domain.RenamePreview) domain.RenameResult {
-	var renamed int
-	var errs []string
+	var completed []domain.RenamePreview
 
 	for _, p := range previews {
 		if p.Conflict {
@@ -96,23 +96,31 @@ func (s *RenamerService) ExecuteRename(previews []domain.RenamePreview) domain.R
 		}
 
 		if err := s.fs.Rename(p.OriginalPath, p.NewPath); err != nil {
-			errs = append(errs, fmt.Sprintf("failed to rename %q: %v", p.OriginalName, err))
-		} else {
-			renamed++
+			// Rollback all completed renames in reverse order
+			var rollbackErrors []string
+			for i := len(completed) - 1; i >= 0; i-- {
+				c := completed[i]
+				if rbErr := s.fs.Rename(c.NewPath, c.OriginalPath); rbErr != nil {
+					rollbackErrors = append(rollbackErrors, fmt.Sprintf("failed to rollback %q: %v", c.NewName, rbErr))
+				}
+			}
+
+			return domain.RenameResult{
+				Success:        false,
+				RenamedCount:   0,
+				Message:        fmt.Sprintf("Rename failed at %q: %v. Rolled back %d files.", p.OriginalName, err, len(completed)),
+				Errors:         []string{fmt.Sprintf("failed to rename %q: %v", p.OriginalName, err)},
+				RolledBack:     true,
+				RollbackErrors: rollbackErrors,
+			}
 		}
+
+		completed = append(completed, p)
 	}
 
-	result := domain.RenameResult{
-		RenamedCount: renamed,
-		Errors:       errs,
+	return domain.RenameResult{
+		Success:      true,
+		RenamedCount: len(completed),
+		Message:      fmt.Sprintf("Successfully renamed %d files", len(completed)),
 	}
-
-	if len(errs) == 0 {
-		result.Success = true
-		result.Message = fmt.Sprintf("Successfully renamed %d files", renamed)
-	} else {
-		result.Message = fmt.Sprintf("Renamed %d files with %d errors", renamed, len(errs))
-	}
-
-	return result
 }
