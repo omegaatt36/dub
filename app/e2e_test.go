@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -413,4 +414,144 @@ func TestE2E_UndoRename(t *testing.T) {
 	content, err := os.ReadFile(filepath.Join(dir, "file_1.txt"))
 	require.NoError(t, err)
 	assert.Equal(t, "content_1", string(content))
+}
+
+// TestE2E_FindReplaceFlow tests: scan → find & replace → auto preview → execute
+func TestE2E_FindReplaceFlow(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"photo_001.jpg", "photo_002.jpg", "photo_003.jpg"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte{}, 0o644))
+	}
+
+	realFS := &adapterfs.OSFileSystem{}
+	realPM := &regex.Engine{}
+	app := NewApp(
+		realFS,
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
+	handler := app.GetHandler()
+
+	// Scan
+	form := url.Values{"path": {dir}}
+	req := httptest.NewRequest("POST", "/api/scan", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.AllFiles, 3)
+
+	// Find & Replace: photo → vacation
+	form = url.Values{"search": {"photo"}, "replace": {"vacation"}}
+	req = httptest.NewRequest("POST", "/api/names/findreplace", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Len(t, app.state.NewNames, 3)
+	assert.Equal(t, "vacation_001", app.state.NewNames[0])
+
+	// Auto preview should be populated
+	require.Len(t, app.state.Previews, 3)
+	assert.Equal(t, "vacation_001.jpg", app.state.Previews[0].NewName)
+
+	// Execute
+	req = httptest.NewRequest("POST", "/api/execute", nil)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	// Verify on disk
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	names := make([]string, len(entries))
+	for i, e := range entries {
+		names[i] = e.Name()
+	}
+	assert.Contains(t, names, "vacation_001.jpg")
+	assert.Contains(t, names, "vacation_002.jpg")
+	assert.Contains(t, names, "vacation_003.jpg")
+}
+
+// TestE2E_TemplateWithPipes tests template with modifiers: {original|upper}_{index:03d}
+func TestE2E_TemplateWithPipes(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"hello.txt", "world.txt"} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, name), []byte{}, 0o644))
+	}
+
+	realFS := &adapterfs.OSFileSystem{}
+	realPM := &regex.Engine{}
+	app := NewApp(
+		realFS,
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
+	handler := app.GetHandler()
+
+	// Scan
+	form := url.Values{"path": {dir}}
+	req := httptest.NewRequest("POST", "/api/scan", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.AllFiles, 2)
+
+	// Generate with pipes
+	form = url.Values{"template": {"{original|upper}_{index:3}"}}
+	req = httptest.NewRequest("POST", "/api/names/generate", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec = httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+
+	require.Len(t, app.state.NewNames, 2)
+	assert.Equal(t, "HELLO_001", app.state.NewNames[0])
+	assert.Equal(t, "WORLD_002", app.state.NewNames[1])
+
+	// Auto preview should be populated
+	require.Len(t, app.state.Previews, 2)
+	assert.Equal(t, "HELLO_001.txt", app.state.Previews[0].NewName)
+}
+
+// TestE2E_ConcurrentRequests tests that concurrent HTMX requests don't panic
+func TestE2E_ConcurrentRequests(t *testing.T) {
+	dir := t.TempDir()
+	for i := 1; i <= 5; i++ {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, fmt.Sprintf("file_%d.txt", i)), []byte{}, 0o644))
+	}
+
+	realFS := &adapterfs.OSFileSystem{}
+	realPM := &regex.Engine{}
+	app := NewApp(
+		realFS,
+		service.NewScannerService(realFS),
+		service.NewPatternService(realPM),
+		service.NewRenamerService(realFS),
+	)
+	handler := app.GetHandler()
+
+	// Initial scan
+	form := url.Values{"path": {dir}}
+	req := httptest.NewRequest("POST", "/api/scan", strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	rec := httptest.NewRecorder()
+	handler.ServeHTTP(rec, req)
+	require.Len(t, app.state.AllFiles, 5)
+
+	// Fire concurrent requests
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			form := url.Values{"pattern": {fmt.Sprintf("file_%d", n%5+1)}}
+			req := httptest.NewRequest("POST", "/api/pattern", strings.NewReader(form.Encode()))
+			req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			rec := httptest.NewRecorder()
+			handler.ServeHTTP(rec, req)
+			assert.Equal(t, http.StatusOK, rec.Code)
+		}(i)
+	}
+	wg.Wait()
 }

@@ -210,5 +210,76 @@ func TestRenamerService_ExecuteRename(t *testing.T) {
 		result := svc.ExecuteRename(previews)
 		assert.False(t, result.Success)
 		assert.Len(t, result.Errors, 1)
+		assert.True(t, result.RolledBack)
+		assert.Equal(t, 0, result.RenamedCount)
+	})
+
+	t.Run("rolls back completed renames on error", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		// First rename succeeds
+		mockFS.EXPECT().Rename("/dir/a.txt", "/dir/x.txt").Return(nil)
+		// Second rename fails
+		mockFS.EXPECT().Rename("/dir/b.txt", "/dir/y.txt").Return(fmt.Errorf("permission denied"))
+		// Rollback: reverse first rename
+		mockFS.EXPECT().Rename("/dir/x.txt", "/dir/a.txt").Return(nil)
+
+		svc := NewRenamerService(mockFS)
+
+		previews := []domain.RenamePreview{
+			{OriginalName: "a.txt", OriginalPath: "/dir/a.txt", NewName: "x.txt", NewPath: "/dir/x.txt"},
+			{OriginalName: "b.txt", OriginalPath: "/dir/b.txt", NewName: "y.txt", NewPath: "/dir/y.txt"},
+		}
+
+		result := svc.ExecuteRename(previews)
+		assert.False(t, result.Success)
+		assert.True(t, result.RolledBack)
+		assert.Equal(t, 0, result.RenamedCount)
+		assert.Empty(t, result.RollbackErrors)
+	})
+
+	t.Run("reports rollback errors when rollback fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		// First rename succeeds
+		mockFS.EXPECT().Rename("/dir/a.txt", "/dir/x.txt").Return(nil)
+		// Second rename fails
+		mockFS.EXPECT().Rename("/dir/b.txt", "/dir/y.txt").Return(fmt.Errorf("disk full"))
+		// Rollback fails too
+		mockFS.EXPECT().Rename("/dir/x.txt", "/dir/a.txt").Return(fmt.Errorf("disk full"))
+
+		svc := NewRenamerService(mockFS)
+
+		previews := []domain.RenamePreview{
+			{OriginalName: "a.txt", OriginalPath: "/dir/a.txt", NewName: "x.txt", NewPath: "/dir/x.txt"},
+			{OriginalName: "b.txt", OriginalPath: "/dir/b.txt", NewName: "y.txt", NewPath: "/dir/y.txt"},
+		}
+
+		result := svc.ExecuteRename(previews)
+		assert.False(t, result.Success)
+		assert.True(t, result.RolledBack)
+		assert.Len(t, result.RollbackErrors, 1)
+	})
+
+	t.Run("no rollback when all renames succeed", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().Rename("/dir/a.txt", "/dir/x.txt").Return(nil)
+		mockFS.EXPECT().Rename("/dir/b.txt", "/dir/y.txt").Return(nil)
+
+		svc := NewRenamerService(mockFS)
+
+		previews := []domain.RenamePreview{
+			{OriginalName: "a.txt", OriginalPath: "/dir/a.txt", NewName: "x.txt", NewPath: "/dir/x.txt"},
+			{OriginalName: "b.txt", OriginalPath: "/dir/b.txt", NewName: "y.txt", NewPath: "/dir/y.txt"},
+		}
+
+		result := svc.ExecuteRename(previews)
+		assert.True(t, result.Success)
+		assert.False(t, result.RolledBack)
+		assert.Empty(t, result.RollbackErrors)
 	})
 }

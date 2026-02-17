@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"sync"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -22,6 +23,7 @@ func WithLogger(logger *slog.Logger) Option {
 
 // App is the main application struct that composes all services.
 type App struct {
+	mu      sync.Mutex
 	fs      port.FileSystem
 	scanner port.Scanner
 	pattern port.PatternFilter

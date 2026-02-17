@@ -2,8 +2,13 @@ package template
 
 import "fmt"
 
-templ PatternInput(pattern string, totalCount, matchedCount int, patternError string) {
-	<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
+templ PatternInput(pattern string, totalCount, matchedCount int, patternError string, enabled bool) {
+	<div class={ "bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm",
+		templ.KV("opacity-50 pointer-events-none", !enabled) }
+		if !enabled {
+			aria-disabled="true"
+		}
+	>
 		<div class="flex justify-between items-start mb-2">
 			<label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Filter Pattern</label>
 			if totalCount > 0 {
