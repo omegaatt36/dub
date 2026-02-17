@@ -1,121 +1,115 @@
+# Dub
+
+![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)
+![Wails](https://img.shields.io/badge/Wails-v2-E30613?style=flat&logo=wails)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+Dub is a modern, cross-platform batch file renamer built with [Go](https://go.dev/) and [Wails](https://wails.io/). It provides a clean, web-based interface for renaming large sets of files using powerful templates, regex patterns, or manual editing.
+
 <p align="center">
   <img src="docs/logo.svg" width="150" alt="Dub Logo">
 </p>
 
-# Dub
-
-A desktop batch file renamer built with Go, designed for fast and intuitive bulk renaming workflows.
-
-![Dub Screenshot](docs/screenshot.png) 
 
 ## Features
 
-- **Native directory picker** — uses OS-native dialog via Wails runtime
-- **Pattern filtering** — regex-based file filtering with shortcuts (`[serial]`, `[word]`, `[alpha]`, `[any]`) matched against filename stems (without extension)
-- **Natural sort** — files are sorted naturally (`file_2` before `file_10`)
-- **Three naming modes**
-  - **Manual** — per-file input fields with auto-save
-  - **From File** — upload a `.txt` or `.csv` with one name per line
-  - **Template** — generate names using `{index}` and `{original}` placeholders
-- **Preview before commit** — see `original → new` mapping with conflict detection before any files are touched
-- **Conflict safety** — all duplicate target names are flagged; conflicting files are never renamed
-- **CJK input support** — IME-aware debouncing prevents composition interruption for Chinese, Japanese, and Korean input
+- Cross-Platform: Runs on macOS, Windows, and Linux.
+- Flexible Renaming Methods:
+  - Template: Use dynamic placeholders like `{index}`, `{date}`, and `{original}` to construct new filenames.
+  - Find & Replace: Support for standard text replacement and Regular Expressions.
+  - Manual/List: Manually edit names or upload a list of new names (drag & drop supported).
+- Real-time Preview: See exactly how your files will be renamed before applying changes.
+- Undo Capability: Safely revert the last renaming operation if you make a mistake.
+- File Filtering: Filter the file list using glob patterns (e.g., `*.jpg`, `IMG_*`) to target specific files.
+- Natural Sort: Files are sorted naturally (e.g., `file_2` comes before `file_10`).
+- Drag & Drop: Drag files or folders directly into the application to scan or load name lists.
 
-## Tech Stack
+## Usage Guide
 
-| Layer | Technology |
-|-------|-----------|
-| Runtime | [Wails v2](https://wails.io/) — Go + native WebView |
-| Templates | [Templ](https://templ.guide/) — type-safe Go HTML templates |
-| Frontend | [HTMX](https://htmx.org/) + [Tailwind CSS](https://tailwindcss.com/) (CDN) |
+<p align="center">
+  <picture>
+    <img src="docs/screenshot-light.png" width="49%" alt="Dub Light Mode">
+  </picture>
+  <picture>
+    <img src="docs/screenshot-dark.png" width="49%" alt="Dub Dark Mode">
+  </picture>
+</p>
 
-## Architecture
+### Template Syntax
 
-Dub follows a hexagonal (clean) architecture with dependency injection:
+The template engine allows you to build complex filenames using tokens. Tokens are enclosed in curly braces `{}`.
 
-```
-Domain (entities, sort) ← Ports (interfaces) ← Services (use cases) → Adapters (OS fs, regex)
-                                                       ↑
-                                                  App (handlers, state, DI wiring)
-```
+Available Tokens:
 
-All state is server-side. The frontend is pure HTML rendered by Templ, with HTMX handling partial page updates. No client-side JavaScript framework is used — only a small `bridge.js` for IME handling and Wails runtime integration.
+| Token | Description | Example |
+| :--- | :--- | :--- |
+| `{original}` | The original filename (without extension). | `image01` |
+| `{ext}` | The file extension (without dot). | `jpg` |
+| `{index}` | A sequential counter (starting from 1). | `1`, `2`, `3` |
+| `{date}` | The file's modification date. | `2023-10-27` |
+| `{parent}` | The name of the parent directory. | `Photos` |
 
-## Getting Started
+Formatting:
+
+You can format tokens by adding a colon `:` followed by the format string.
+
+- Index Padding: `{index:3}` results in `001`, `002`, `010`.
+- Date Formatting: `{date:2006-01-02}` uses Go's reference time layout.
+  - `2006` = Year
+  - `01` = Month
+  - `02` = Day
+  - `15` = Hour (24h)
+  - `04` = Minute
+  - `05` = Second
+
+Pipes (Modifiers):
+
+You can transform values using pipes `|`.
+
+- `upper`: Convert to uppercase (`{original|upper}`).
+- `lower`: Convert to lowercase (`{original|lower}`).
+- `title`: Capitalize the first letter of words (`{original|title}`).
+
+Examples:
+
+- `vacation_{index:3}` -> `vacation_001`, `vacation_002`
+- `{parent}_{date:20060102}_{index}` -> `Photos_20231027_1`
+- `{original|lower}_v2` -> `image01_v2`
+
+### Find & Replace
+
+Use standard string replacement or enable Regular Expressions for advanced matching.
+
+- Search: `IMG_(\d+)`
+- Replace: `Photo_$1`
+
+## Development
 
 ### Prerequisites
 
-- [Go](https://go.dev/) 1.26+
-- [Task](https://taskfile.dev/) (Task runner)
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation) v2
+- [Go](https://go.dev/dl/) (v1.26+)
+- [Wails](https://wails.io/docs/gettingstarted/installation) CLI
 - [Templ](https://templ.guide/quick-start/installation) CLI
+- [Task](https://taskfile.dev/) (Build tool)
 
-```bash
-go install github.com/go-task/task/v3/cmd/task@latest
-go install github.com/a-h/templ/cmd/templ@latest
-go install github.com/wailsapp/wails/v2/cmd/wails@latest
-```
-
-### Development
-
-```bash
-# Generate templ files and start dev server with hot reload
-task dev
-```
-
-This runs `templ generate -watch` and `wails dev` concurrently.
-
-### Build
-
-```bash
-# Production build
-task build
-```
-
-Outputs a standalone binary in `build/bin/`.
-
-## Testing
-
-```bash
-# Run all tests
-task test
-```
-
-## How It Works
-
-1. **Select Directory** — opens a native OS dialog, scans files with natural sort
-2. **Filter** (optional) — type a regex or use shortcuts to narrow down files
-3. **Name** — enter new names manually, upload from file, or generate from template
-4. **Preview** — review the `original → new name` mapping; conflicts are highlighted in red
-5. **Execute** — rename files on disk; conflicting entries are safely skipped
 
 ## Installation
 
-Download the latest release from the [Releases](../../releases) page.
+### macOS Installation Notes
 
-#### macOS Installation Notes
+If you download a pre-built binary/DMG, you may encounter a security warning. This is normal for unsigned applications. To resolve:
 
-After downloading and installing the DMG, you may encounter a security warning. This is normal for unsigned applications. To resolve:
-
-**Option 1: Command Line (Recommended)**
+Command Line (Recommended):
 ```bash
-# Remove quarantine attribute
 xattr -rd com.apple.quarantine /Applications/Dub.app
-# Then open the app normally
 open /Applications/Dub.app
 ```
 
-**Option 2: System Preferences**
-1. Click "Cancel" when you see the warning
-2. Go to System Preferences → Privacy & Security
-3. Look for "Dub.app was blocked" notification
-4. Click "Open Anyway"
-
-**Option 3: Right-click Method**
-1. Right-click on Dub.app in Applications
-2. Select "Open" from the context menu
-3. Click "Open" in the security dialog
+System Preferences:
+1. Click "Cancel" on the warning.
+2. Go to System Preferences → Privacy & Security.
+3. Click "Open Anyway" for Dub.app.
 
 ## License
 
-[MIT](LICENSE)
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
