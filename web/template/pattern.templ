@@ -2,7 +2,7 @@ package template
 
 import "fmt"
 
-templ PatternInput(pattern string, totalCount, matchedCount int) {
+templ PatternInput(pattern string, totalCount, matchedCount int, patternError string) {
 	<div class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm">
 		<div class="flex justify-between items-start mb-2">
 			<label class="block text-sm font-medium text-gray-900 dark:text-gray-200">Filter Pattern</label>
@@ -27,7 +27,10 @@ templ PatternInput(pattern string, totalCount, matchedCount int) {
 				data-event="pattern-changed"
 				value={ pattern }
 				placeholder="Regex pattern (e.g. ^file_\d+)"
-				class="block w-full pl-10 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2.5 text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 transition-all"
+				class={ "block w-full pl-10 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2.5 text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-blue-500/50 transition-all",
+					templ.KV("border-red-400 dark:border-red-500 focus:border-red-500", patternError != ""),
+					templ.KV("border-green-400 dark:border-green-500 focus:border-green-500", pattern != "" && patternError == "" && totalCount > 0),
+					templ.KV("border-gray-200 dark:border-gray-600 focus:border-blue-500", patternError == "" && (pattern == "" || totalCount == 0)) }
 				hx-post="/api/pattern"
 				hx-trigger="pattern-changed delay:200ms"
 				hx-target="#main-content"
@@ -36,6 +39,9 @@ templ PatternInput(pattern string, totalCount, matchedCount int) {
 				autocomplete="off"
 			/>
 		</div>
+		if patternError != "" {
+			<p class="text-xs text-red-500 dark:text-red-400 mt-1 ml-1">{ patternError }</p>
+		}
 		<p class="text-xs text-gray-500 dark:text-gray-400 mt-1.5 ml-1">Matches against filename (without extension)</p>
 		<div class="flex items-center gap-2 mt-3 flex-wrap">
 			<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mr-1">Insert:</span>
@@ -63,6 +69,21 @@ templ PatternInput(pattern string, totalCount, matchedCount int) {
 				onclick="appendShortcut('[alpha]')"
 				title="Letters only: ([a-zA-Z]+)"
 			>[alpha]</button>
+		</div>
+		<div class="flex items-center gap-2 mt-2 flex-wrap">
+			<span class="text-xs text-gray-500 dark:text-gray-400 font-medium mr-1">Presets:</span>
+			<select
+				class="text-xs bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+				onchange="applyPreset(this)"
+			>
+				<option value="">Select...</option>
+				<option value="\d+">Digits</option>
+				<option value="^[a-zA-Z]">Starts with letter</option>
+				<option value="\s">Has spaces</option>
+				<option value="[\p{Han}\p{Hiragana}\p{Katakana}\p{Hangul}]">CJK/JP/KR</option>
+				<option value="^\d{4}">Starts with 4 digits</option>
+				<option value="_">Contains underscore</option>
+			</select>
 		</div>
 	</div>
 }

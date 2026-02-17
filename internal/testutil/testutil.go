@@ -20,14 +20,15 @@ func (m *MockDirEntry) Info() (os.FileInfo, error) { return m.FileInfo, nil }
 
 // MockFileInfo implements os.FileInfo for testing.
 type MockFileInfo struct {
-	FileName string
-	FileSize int64
+	FileName    string
+	FileSize    int64
+	FileModTime time.Time
 }
 
 func (m *MockFileInfo) Name() string       { return m.FileName }
 func (m *MockFileInfo) Size() int64        { return m.FileSize }
 func (m *MockFileInfo) Mode() fs.FileMode  { return 0o644 }
-func (m *MockFileInfo) ModTime() time.Time { return time.Time{} }
+func (m *MockFileInfo) ModTime() time.Time { return m.FileModTime }
 func (m *MockFileInfo) IsDir() bool        { return false }
 func (m *MockFileInfo) Sys() any           { return nil }
 
@@ -45,5 +46,13 @@ func NewMockDirDirEntry(name string) *MockDirEntry {
 		EntryName: name,
 		Dir:       true,
 		FileInfo:  &MockFileInfo{FileName: name},
+	}
+}
+
+// NewMockDirEntryWithModTime creates a MockDirEntry for a file with the given name, size, and ModTime.
+func NewMockDirEntryWithModTime(name string, size int64, modTime time.Time) *MockDirEntry {
+	return &MockDirEntry{
+		EntryName: name,
+		FileInfo:  &MockFileInfo{FileName: name, FileSize: size, FileModTime: modTime},
 	}
 }

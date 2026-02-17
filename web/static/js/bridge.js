@@ -154,6 +154,32 @@
       }, true);
     }
   });
+
+  // --- Keyboard Shortcuts ---
+  document.addEventListener("keydown", (e) => {
+    const isMod = e.metaKey || e.ctrlKey;
+    if (!isMod) return;
+
+    const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+
+    if (e.key === "Enter") {
+      e.preventDefault();
+      const executeBtn = document.getElementById("execute-btn");
+      const previewBtn = document.querySelector('[hx-post="/api/preview"]:not([hx-vals])');
+      if (executeBtn && executeBtn.style.display !== "none") {
+        executeBtn.click();
+      } else if (previewBtn) {
+        previewBtn.click();
+      }
+    } else if (e.key === "z" && !isInput) {
+      e.preventDefault();
+      const undoBtn = document.querySelector('[hx-post="/api/undo"]');
+      if (undoBtn) undoBtn.click();
+    } else if (e.key === "o" && !isInput) {
+      e.preventDefault();
+      window.selectDirectory();
+    }
+  });
 })();
 
 // --- Directory Selection & Helpers ---
@@ -187,6 +213,31 @@ window.appendShortcut = function (shortcut) {
   input.setRangeText(shortcut, input.selectionStart, input.selectionEnd, "end");
 
   htmx.trigger(input, "pattern-changed");
+  input.focus();
+};
+
+window.applyPreset = function (select) {
+  const value = select.value;
+  if (!value) return;
+  const input = document.querySelector('input[name="pattern"]');
+  if (!input) return;
+  input.value = value;
+  select.value = "";
+  htmx.trigger(input, "pattern-changed");
+  input.focus();
+};
+
+window.appendToTemplate = function (text) {
+  const input = document.querySelector('input[name="template"]');
+  if (!input) return;
+  input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
+  input.focus();
+};
+
+window.appendToFindReplace = function (fieldName, text) {
+  const input = document.querySelector(`input[name="${fieldName}"]`);
+  if (!input) return;
+  input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
   input.focus();
 };
 

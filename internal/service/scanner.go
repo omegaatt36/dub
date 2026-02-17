@@ -43,6 +43,7 @@ func (s *ScannerService) Scan(path string) ([]domain.FileItem, error) {
 			Path:      filepath.Join(path, name),
 			Extension: ext,
 			Size:      uint64(info.Size()),
+			ModTime:   info.ModTime(),
 		})
 	}
 
