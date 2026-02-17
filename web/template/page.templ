@@ -7,11 +7,14 @@ type PageData struct {
 	AllFiles          []domain.FileItem
 	MatchedFiles      []domain.FileItem
 	Pattern           string
+	PatternError      string
 	NewNames          []string
 	Previews          []domain.RenamePreview
 	Error             string
 	NamingMethod      string
 	Template          string
+	SearchPattern     string
+	ReplacePattern    string
 	Result            *domain.RenameResult
 	CanUndo           bool
 }
@@ -57,9 +60,9 @@ templ MainContent(data PageData) {
 		</div>
 		<!-- Right column: Pattern + Editor + Actions -->
 		<div class="flex flex-col gap-4 min-h-0">
-			@PatternInput(data.Pattern, len(data.AllFiles), len(data.MatchedFiles))
+			@PatternInput(data.Pattern, len(data.AllFiles), len(data.MatchedFiles), data.PatternError)
 			<div class="flex-1 min-h-0 overflow-auto">
-				@NamesEditor(displayFiles(data), data.NewNames, data.NamingMethod, data.Template)
+				@NamesEditor(displayFiles(data), data.NewNames, data.NamingMethod, data.Template, data.SearchPattern, data.ReplacePattern)
 			</div>
 			@Actions(len(displayFiles(data)) > 0, len(data.NewNames) > 0, len(data.Previews) > 0, data.Result, data.CanUndo)
 		</div>

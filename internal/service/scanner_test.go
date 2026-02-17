@@ -3,6 +3,7 @@ package service
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -60,5 +61,21 @@ func TestScannerService_Scan(t *testing.T) {
 		require.NoError(t, err)
 
 		assert.Equal(t, ".jpg", files[0].Extension)
+	})
+
+	t.Run("populates ModTime from file info", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		fixedTime := time.Date(2026, 2, 17, 10, 30, 0, 0, time.UTC)
+		mockFS.EXPECT().ReadDir("/test").Return([]os.DirEntry{
+			testutil.NewMockDirEntryWithModTime("photo.jpg", 500, fixedTime),
+		}, nil)
+
+		scanner := NewScannerService(mockFS)
+		files, err := scanner.Scan("/test")
+		require.NoError(t, err)
+		require.Len(t, files, 1)
+		assert.Equal(t, fixedTime, files[0].ModTime)
 	})
 }

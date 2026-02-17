@@ -5,7 +5,7 @@ import (
 	"github.com/omegaatt36/dub/internal/domain"
 )
 
-templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl string) {
+templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl string, searchPattern string, replacePattern string) {
 	<div id="names-editor" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full shadow-sm">
 		<div class="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
 			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200">New Names</h3>
@@ -55,6 +55,20 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 				>
 					Template
 				</button>
+				<button
+					type="button"
+					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
+						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "findreplace"),
+						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "findreplace") }
+					role="tab"
+					aria-selected={ boolStr(method == "findreplace") }
+					hx-post="/api/names"
+					hx-vals='{"method": "findreplace"}'
+					hx-target="#names-editor"
+					hx-swap="outerHTML"
+				>
+					Find &amp; Replace
+				</button>
 			</div>
 			<div class="flex-1 overflow-y-auto min-h-0 relative">
 				if len(files) == 0 {
@@ -69,6 +83,8 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 							@FileEditor(names)
 						case "template":
 							@TemplateEditor(tmpl, len(files), names)
+						case "findreplace":
+							@FindReplaceEditor(searchPattern, replacePattern, names)
 					}
 				}
 			</div>
@@ -168,10 +184,19 @@ templ TemplateEditor(tmpl string, fileCount int, names []string) {
 				Generate
 			</button>
 		</div>
-		<div class="flex gap-2 mb-4 text-xs">
-			<span class="text-gray-500 dark:text-gray-400">Variables:</span>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{index}'">{ "{index}" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="document.querySelector('input[name=template]').value += '{original}'">{ "{original}" }</code>
+		<div class="flex gap-2 mb-2 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Variables:</span>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{index}')">{ "{index}" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{original}')">{ "{original}" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{ext}')">{ "{ext}" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{date}')">{ "{date}" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{parent}')">{ "{parent}" }</code>
+		</div>
+		<div class="flex gap-2 mb-4 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Modifiers:</span>
+			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|upper')">{ "|upper" }</code>
+			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|lower')">{ "|lower" }</code>
+			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|title')">{ "|title" }</code>
 		</div>
 		if len(names) > 0 {
 			<div class="flex-1 min-h-0 flex flex-col">
@@ -207,4 +232,66 @@ func boolStr(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+templ FindReplaceEditor(searchPattern string, replacePattern string, names []string) {
+	<div class="h-full flex flex-col">
+		<div class="space-y-3 mb-4">
+			<div>
+				<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search (regex)</label>
+				<input
+					type="text"
+					name="search"
+					value={ searchPattern }
+					placeholder="(\d+)-(\w+)"
+					spellcheck="false"
+					autocomplete="off"
+					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+				/>
+			</div>
+			<div>
+				<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Replace</label>
+				<input
+					type="text"
+					name="replace"
+					value={ replacePattern }
+					placeholder="$2_$1"
+					spellcheck="false"
+					autocomplete="off"
+					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+				/>
+			</div>
+			<button
+				type="button"
+				class="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+				hx-post="/api/names/findreplace"
+				hx-include="[name='search'], [name='replace']"
+				hx-target="#main-content"
+				hx-swap="innerHTML"
+			>
+				Apply
+			</button>
+		</div>
+		<div class="flex gap-2 mb-4 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Groups:</span>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$1')">{ "$1" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$2')">{ "$2" }</code>
+			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$3')">{ "$3" }</code>
+		</div>
+		<div class="flex gap-2 mb-4 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Patterns:</span>
+			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(\\d+)')">{ `\d+` }</code>
+			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(\\w+)')">{ `\w+` }</code>
+			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(.*)')">{ `.*` }</code>
+		</div>
+		<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Matches against filename stem (without extension)</p>
+		if len(names) > 0 {
+			<div class="flex-1 min-h-0 flex flex-col">
+				<h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
+				<div class="bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 flex-1 overflow-y-auto">
+					@NamesList(names)
+				</div>
+			</div>
+		}
+	</div>
 }

@@ -24,6 +24,7 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
 	mux.HandleFunc("POST /api/names", a.handleNames)
 	mux.HandleFunc("POST /api/names/generate", a.handleNamesGenerate)
+	mux.HandleFunc("POST /api/names/findreplace", a.handleNamesFindReplace)
 	mux.HandleFunc("POST /api/names/upload", a.handleNamesUpload)
 	mux.HandleFunc("POST /api/preview", a.handlePreview)
 	mux.HandleFunc("POST /api/execute", a.handleExecute)
@@ -100,20 +101,21 @@ func (a *App) handlePattern(w http.ResponseWriter, r *http.Request) {
 	pattern := r.FormValue("pattern")
 	a.state.Pattern = pattern
 	a.state.ResetForPattern()
+	a.state.PatternError = ""
 
 	if pattern == "" {
 		a.state.MatchedFiles = a.state.AllFiles
 	} else {
 		matched, err := a.pattern.MatchFiles(a.state.AllFiles, pattern)
 		if err != nil {
-			a.state.Error = fmt.Sprintf("Invalid pattern: %v", err)
+			a.state.PatternError = err.Error()
 			a.state.MatchedFiles = a.state.AllFiles
 		} else {
 			a.state.MatchedFiles = matched
-			a.state.Error = ""
 		}
 	}
 
+	a.state.Error = ""
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -138,7 +140,7 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Method toggle only — just swap the editor panel
-	renderTempl(w, r, template.NamesEditor(a.displayFiles(), a.state.NewNames, a.state.NamingMethod, a.state.Template))
+	renderTempl(w, r, template.NamesEditor(a.displayFiles(), a.state.NewNames, a.state.NamingMethod, a.state.Template, a.state.SearchPattern, a.state.ReplacePattern))
 }
 
 func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
@@ -151,15 +153,34 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	files := a.displayFiles()
 	names := make([]string, len(files))
 	for i, f := range files {
-		name := tmpl
-		name = strings.ReplaceAll(name, "{index}", fmt.Sprintf("%d", i+1))
-		origName := strings.TrimSuffix(f.Name, f.Extension)
-		name = strings.ReplaceAll(name, "{original}", origName)
-		names[i] = name
+		names[i] = domain.ExpandTemplate(tmpl, f, i)
 	}
 	a.state.NewNames = names
 	a.state.NamingMethod = "template"
 	a.state.ClearPreviews()
+
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
+	search := r.FormValue("search")
+	replace := r.FormValue("replace")
+
+	a.state.SearchPattern = search
+	a.state.ReplacePattern = replace
+	a.state.NamingMethod = "findreplace"
+
+	files := a.displayFiles()
+	names, err := domain.FindReplace(files, search, replace)
+	if err != nil {
+		a.state.Error = fmt.Sprintf("Invalid search pattern: %v", err)
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	a.state.NewNames = names
+	a.state.ClearPreviews()
+	a.state.Error = ""
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
@@ -324,11 +345,14 @@ func (a *App) buildPageData(result interface{}) template.PageData {
 		AllFiles:          a.state.AllFiles,
 		MatchedFiles:      a.state.MatchedFiles,
 		Pattern:           a.state.Pattern,
+		PatternError:      a.state.PatternError,
 		NewNames:          a.state.NewNames,
 		Previews:          a.state.Previews,
 		Error:             a.state.Error,
 		NamingMethod:      a.state.NamingMethod,
 		Template:          a.state.Template,
+		SearchPattern:     a.state.SearchPattern,
+		ReplacePattern:    a.state.ReplacePattern,
 		CanUndo:           a.state.CanUndo,
 	}
 	if r, ok := result.(*domain.RenameResult); ok {

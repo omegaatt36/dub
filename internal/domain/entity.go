@@ -1,12 +1,16 @@
 package domain
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type FileItem struct {
 	Name      string
 	Path      string
 	Extension string
 	Size      uint64
+	ModTime   time.Time
 }
 
 type RenamePreview struct {

@@ -8,11 +8,14 @@ type AppState struct {
 	AllFiles          []domain.FileItem
 	MatchedFiles      []domain.FileItem
 	Pattern           string
+	PatternError      string
 	NewNames          []string
 	Previews          []domain.RenamePreview
 	Error             string
-	NamingMethod      string // "manual" | "file" | "template"
+	NamingMethod      string // "manual" | "file" | "template" | "findreplace"
 	Template          string
+	SearchPattern     string
+	ReplacePattern    string
 	LastRenameHistory []domain.RenamePreview
 	CanUndo           bool
 }
