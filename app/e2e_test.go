@@ -335,7 +335,7 @@ func TestE2E_UndoRename(t *testing.T) {
 	dir := t.TempDir()
 	for i := 1; i <= 3; i++ {
 		path := filepath.Join(dir, fmt.Sprintf("file_%d.txt", i))
-		require.NoError(t, os.WriteFile(path, []byte(fmt.Sprintf("content_%d", i)), 0o644))
+		require.NoError(t, os.WriteFile(path, fmt.Appendf(nil, "content_%d", i), 0o644))
 	}
 
 	realFS := &adapterfs.OSFileSystem{}
@@ -541,7 +541,7 @@ func TestE2E_ConcurrentRequests(t *testing.T) {
 
 	// Fire concurrent requests
 	var wg sync.WaitGroup
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
