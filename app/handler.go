@@ -394,7 +394,7 @@ func (a *App) autoPreview() {
 	a.state.Previews = previews
 }
 
-func (a *App) buildPageData(result interface{}) template.PageData {
+func (a *App) buildPageData(result any) template.PageData {
 	data := template.PageData{
 		SelectedDirectory: a.state.SelectedDirectory,
 		AllFiles:          a.state.AllFiles,
