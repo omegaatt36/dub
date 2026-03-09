@@ -29,7 +29,7 @@ tasks:
     desc: Run development server
     deps: [generate, frontend-prep]
     cmds:
-      - templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev
+      - templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev -tags webkit2_40
 
   test:
     desc: Run tests
@@ -45,7 +45,7 @@ tasks:
     desc: Build the application
     deps: [generate, frontend-prep]
     cmds:
-      - wails build
+      - wails build -tags webkit2_40
 
   clean:
     desc: Clean build artifacts
