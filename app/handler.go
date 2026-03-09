@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,21 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/undo", a.handleUndo)
 	mux.HandleFunc("POST /api/names/load", a.handleNamesLoad)
 
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		slog.Info("HTTP Request", "method", r.Method, "url", r.URL.String())
+
+		// CORS headers for Wails Linux (WebKitGTK)
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, hx-current-url, hx-request, hx-target, hx-trigger")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // handlePage returns the inner page content (no HTML shell).
