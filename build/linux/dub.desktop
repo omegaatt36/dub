@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Dub
+Comment=Batch File Renamer
+Exec=dub %F
+Icon=dub
+Terminal=false
+Type=Application
+Categories=Utility;System;FileTools;
+MimeType=inode/directory;
+Keywords=rename;batch;file;
+StartupNotify=true
