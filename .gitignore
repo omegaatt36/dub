@@ -3,6 +3,6 @@ test
 
 frontend/dist/
 
-*_templ.go
+
 tailwindcss
 .task
