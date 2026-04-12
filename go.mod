@@ -5,12 +5,13 @@ go 1.26.1
 require (
 	github.com/a-h/templ v0.3.1001
 	github.com/stretchr/testify v1.11.1
-	github.com/wailsapp/wails/v2 v2.11.0
+	github.com/wailsapp/wails/v2 v2.12.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/text v0.34.0
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/bep/debounce v1.2.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
