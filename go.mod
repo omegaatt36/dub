@@ -7,7 +7,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/wailsapp/wails/v2 v2.13.0
 	go.uber.org/mock v0.6.0
-	golang.org/x/text v0.39.0
+	golang.org/x/text v0.40.0
 )
 
 require (
