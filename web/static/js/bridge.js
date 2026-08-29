@@ -81,10 +81,10 @@
 
   // --- Smart Swap Preservation (Restore cursor & value) ---
 
-  document.addEventListener("htmx:beforeSwap", (evt) => {
+  document.addEventListener("htmx:before:swap", (evt) => {
     // Block swap during IME composition
     if (isComposing) {
-      evt.detail.shouldSwap = false;
+      evt.preventDefault();
       return;
     }
 
@@ -108,7 +108,7 @@
     }
   });
 
-  document.addEventListener("htmx:afterSettle", () => {
+  document.addEventListener("htmx:after:settle", () => {
     if (!savedInputState) return;
 
     const input = document.querySelector(`[name="${savedInputState.name}"]`);
