@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/omegaatt36/dub/internal/domain"
@@ -98,8 +99,8 @@ func (s *RenamerService) ExecuteRename(previews []domain.RenamePreview) domain.R
 		if err := s.fs.Rename(p.OriginalPath, p.NewPath); err != nil {
 			// Rollback all completed renames in reverse order
 			var rollbackErrors []string
-			for i := len(completed) - 1; i >= 0; i-- {
-				c := completed[i]
+			for _, c := range slices.Backward(completed) {
+
 				if rbErr := s.fs.Rename(c.NewPath, c.OriginalPath); rbErr != nil {
 					rollbackErrors = append(rollbackErrors, fmt.Sprintf("failed to rollback %q: %v", c.NewName, rbErr))
 				}

@@ -51,3 +51,12 @@ tasks:
     desc: Clean build artifacts
     cmds:
       - rm -rf build/ frontend/dist/
+
+  fmt:
+    cmds:
+      - golangci-lint fmt ./...
+      - go mod tidy
+
+  lint:
+    cmds:
+      - golangci-lint run ./...
