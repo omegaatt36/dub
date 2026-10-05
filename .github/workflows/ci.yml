@@ -19,9 +19,6 @@ jobs:
       - name: Install Task
         uses: go-task/setup-task@v1
 
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
       # Wails dependencies are required on Linux to compile/test packages
       # that might interact with the frontend runtime
       - name: Install Linux dependencies
@@ -31,6 +28,9 @@ jobs:
 
       - name: Generate code
         run: task generate
+
+      - name: Build
+        run: go build -tags webkit2_41 ./...
 
       - name: Run Tests
         run: task test

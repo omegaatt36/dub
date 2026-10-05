@@ -1,115 +1,78 @@
 # Dub
 
-![Go Version](https://img.shields.io/badge/Go-1.26+-00ADD8?style=flat&logo=go)
-![Wails](https://img.shields.io/badge/Wails-v2-E30613?style=flat&logo=wails)
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
+A clean, cross-platform batch file renamer for your desktop.
 
-Dub is a modern, cross-platform batch file renamer built with [Go](https://go.dev/) and [Wails](https://wails.io/). It provides a clean, web-based interface for renaming large sets of files using powerful templates, regex patterns, or manual editing.
+Rename many files at once with templates, regular expressions, or your own list. Every rename is previewed first, and one click reverts the last batch.
 
-<p align="center">
-  <img src="docs/logo.svg" width="150" alt="Dub Logo">
-</p>
+## Install
 
+Download the latest release for macOS (`.dmg`) or Linux (`.tar.gz`) from [Releases](https://github.com/raiven_kao/dub/releases).
 
-## Features
+Dub is unsigned, so macOS quarantines it on first launch. Remove the flag:
 
-- Cross-Platform: Runs on macOS, Windows, and Linux.
-- Flexible Renaming Methods:
-  - Template: Use dynamic placeholders like `{index}`, `{date}`, and `{original}` to construct new filenames.
-  - Find & Replace: Support for standard text replacement and Regular Expressions.
-  - Manual/List: Manually edit names or upload a list of new names (drag & drop supported).
-- Real-time Preview: See exactly how your files will be renamed before applying changes.
-- Undo Capability: Safely revert the last renaming operation if you make a mistake.
-- File Filtering: Filter the file list using glob patterns (e.g., `*.jpg`, `IMG_*`) to target specific files.
-- Natural Sort: Files are sorted naturally (e.g., `file_2` comes before `file_10`).
-- Drag & Drop: Drag files or folders directly into the application to scan or load name lists.
-
-## Usage Guide
-
-<p align="center">
-  <picture>
-    <img src="docs/screenshot-light.png" width="49%" alt="Dub Light Mode">
-  </picture>
-  <picture>
-    <img src="docs/screenshot-dark.png" width="49%" alt="Dub Dark Mode">
-  </picture>
-</p>
-
-### Template Syntax
-
-The template engine allows you to build complex filenames using tokens. Tokens are enclosed in curly braces `{}`.
-
-Available Tokens:
-
-| Token | Description | Example |
-| :--- | :--- | :--- |
-| `{original}` | The original filename (without extension). | `image01` |
-| `{ext}` | The file extension (without dot). | `jpg` |
-| `{index}` | A sequential counter (starting from 1). | `1`, `2`, `3` |
-| `{date}` | The file's modification date. | `2023-10-27` |
-| `{parent}` | The name of the parent directory. | `Photos` |
-
-Formatting:
-
-You can format tokens by adding a colon `:` followed by the format string.
-
-- Index Padding: `{index:3}` results in `001`, `002`, `010`.
-- Date Formatting: `{date:2006-01-02}` uses Go's reference time layout.
-  - `2006` = Year
-  - `01` = Month
-  - `02` = Day
-  - `15` = Hour (24h)
-  - `04` = Minute
-  - `05` = Second
-
-Pipes (Modifiers):
-
-You can transform values using pipes `|`.
-
-- `upper`: Convert to uppercase (`{original|upper}`).
-- `lower`: Convert to lowercase (`{original|lower}`).
-- `title`: Capitalize the first letter of words (`{original|title}`).
-
-Examples:
-
-- `vacation_{index:3}` -> `vacation_001`, `vacation_002`
-- `{parent}_{date:20060102}_{index}` -> `Photos_20231027_1`
-- `{original|lower}_v2` -> `image01_v2`
-
-### Find & Replace
-
-Use standard string replacement or enable Regular Expressions for advanced matching.
-
-- Search: `IMG_(\d+)`
-- Replace: `Photo_$1`
-
-## Development
-
-### Prerequisites
-
-- [Go](https://go.dev/dl/) (v1.26+)
-- [Wails](https://wails.io/docs/gettingstarted/installation) CLI
-- [Templ](https://templ.guide/quick-start/installation) CLI
-- [Task](https://taskfile.dev/) (Build tool)
-
-
-## Installation
-
-### macOS Installation Notes
-
-If you download a pre-built binary/DMG, you may encounter a security warning. This is normal for unsigned applications. To resolve:
-
-Command Line (Recommended):
-```bash
+```sh
 xattr -rd com.apple.quarantine /Applications/Dub.app
 open /Applications/Dub.app
 ```
 
-System Preferences:
-1. Click "Cancel" on the warning.
-2. Go to System Preferences → Privacy & Security.
-3. Click "Open Anyway" for Dub.app.
+Or click "Cancel" on the warning, then System Settings → Privacy & Security → "Open Anyway".
+
+## Quick Start
+
+- Drag a file or folder into the window to scan its directory.
+- Pick a mode: **Template**, **Find & Replace**, or edit the names by hand.
+- Check the preview. Duplicate target names are flagged, and the rename stays blocked until you resolve them.
+- Press **Rename**, then **Undo** if you change your mind.
+
+## Rename Modes
+
+**Template** builds names from tokens in curly braces. The original extension is appended automatically.
+
+| Token | Result | Example |
+|---|---|---|
+| `{original}` | Filename without extension | `image01` |
+| `{ext}` | Extension without the dot | `jpg` |
+| `{index}` | Counter from 1 | `1`, `2` |
+| `{date}` | Modification date | `2023-10-27` |
+| `{parent}` | Containing directory name | `Photos` |
+
+Add a format after a colon: `{index:3}` gives `001`, and `{date:20060102}` uses Go's reference time layout. Chain pipes to transform a value: `{original|upper}`, `{original|lower}`, `{original|title}`. Unknown tokens are left as-is.
+
+**Find & Replace** always uses a Go regular expression (RE2) against the filename without its extension. The replacement takes capture groups as `$1`, `$2`. Files that do not match keep their name.
+
+- Search: `IMG_(\d+)`
+- Replace: `Photo_$1`
+
+**Manual** lets you type names in place, or drop a `.txt` or `.csv` file on the editor to load a list.
+
+## Filtering
+
+The filter box takes a Go regular expression, matched against the filename without its extension. Shortcuts expand before the pattern compiles:
+
+| Shortcut | Expands to | Matches |
+|---|---|---|
+| `[serial]`, `[number]` | `(\d+)` | Digits |
+| `[word]` | `(\w+)` | Word characters |
+| `[alpha]` | `([a-zA-Z]+)` | Letters |
+| `[any]` | `(.*)` | Anything |
+
+Files sort naturally, so `file_2` comes before `file_10`.
+
+## Development
+
+Common tasks are defined in `Taskfile.yml` and run through [Task](https://taskfile.dev/).
+
+```sh
+task dev    # templ + tailwind watchers, then wails dev
+task build  # production build
+task test   # go test -race -tags webkit2_41 ./...
+task check  # go vet, golangci-lint, govulncheck
+```
+
+You need [Go](https://go.dev/dl/) 1.27+, [Task](https://taskfile.dev/), the [Wails](https://wails.io/docs/gettingstarted/installation) CLI, and the Tailwind CSS standalone CLI at `./tailwindcss` in the repository root. Templ, golangci-lint, and govulncheck come from `go.mod`, so `go tool` resolves them for you.
+
+`go build ./...` and `go test ./...` also work on a fresh clone: `main.go` embeds `web/index.html` and `web/static` directly, and the generated CSS plus vendored htmx are committed.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+[MIT](LICENSE)

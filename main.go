@@ -15,8 +15,22 @@ import (
 	"github.com/omegaatt36/dub/internal/service"
 )
 
-//go:embed all:frontend/dist
-var assets embed.FS
+// The frontend is embedded straight from web/ so a fresh clone builds with no
+// generated copy of the tree.
+//
+// Only the HTML shell and the static tree are embedded. web/template holds the
+// templ sources and their generated Go files, and the asset server serves
+// whatever the fs.FS contains, so embedding that directory would publish the
+// application source at /template/page_templ.go.
+//
+// The asset server roots the fs.FS at the directory holding index.html, so "/"
+// resolves to web/index.html and "/static/..." to web/static/... without any
+// further wiring.
+var (
+	//go:embed web/index.html
+	//go:embed all:web/static
+	assets embed.FS
+)
 
 func main() {
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{

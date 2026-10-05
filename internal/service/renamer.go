@@ -19,19 +19,24 @@ func NewRenamerService(fs port.FileSystem) *RenamerService {
 	return &RenamerService{fs: fs}
 }
 
-// validateFileName checks for invalid characters in filenames.
+// validateFileName rejects names that cannot exist on disk or would escape the
+// target directory. Extension characters are included so a proposed name cannot
+// smuggle a path separator past the join.
 func validateFileName(name string) error {
+	if name == "" {
+		return domain.ErrInvalidFileName
+	}
 	if strings.Contains(name, "..") ||
-		strings.Contains(name, "/") ||
-		strings.Contains(name, "\\") {
+		strings.ContainsAny(name, `/\`) ||
+		strings.ContainsRune(name, 0) {
 		return domain.ErrInvalidFileName
 	}
 	return nil
 }
 
-// PreviewRename generates rename previews from matched files and new names.
-// It appends the original file extension to each new name and detects conflicts.
-func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []string) ([]domain.RenamePreview, error) {
+// PreviewRename generates rename previews for the given files and new names,
+// applying policy to decide each resulting extension, and flags conflicts.
+func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []string, policy port.ExtensionPolicy) ([]domain.RenamePreview, error) {
 	if len(files) != len(newNames) {
 		return nil, domain.ErrMismatchedNames
 	}
@@ -39,15 +44,16 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 	previews := make([]domain.RenamePreview, len(files))
 	for i, f := range files {
 		newName := strings.TrimSpace(newNames[i])
-		if newName == "" {
+		switch {
+		case newName == "":
 			newName = f.Name
-		} else if f.Extension != "" && !strings.HasSuffix(strings.ToLower(newName), strings.ToLower(f.Extension)) {
+		case policy == port.KeepExtension && f.Extension != "" && !strings.HasSuffix(strings.ToLower(newName), strings.ToLower(f.Extension)):
 			newName = newName + f.Extension
 		}
 
 		if newName != f.Name {
 			if err := validateFileName(newName); err != nil {
-				return nil, fmt.Errorf("invalid name %q: %w", newName, err)
+				return nil, fmt.Errorf("invalid name %q: %w", newName, domain.ErrInvalidFileName)
 			}
 		}
 
@@ -100,7 +106,6 @@ func (s *RenamerService) ExecuteRename(previews []domain.RenamePreview) domain.R
 			// Rollback all completed renames in reverse order
 			var rollbackErrors []string
 			for _, c := range slices.Backward(completed) {
-
 				if rbErr := s.fs.Rename(c.NewPath, c.OriginalPath); rbErr != nil {
 					rollbackErrors = append(rollbackErrors, fmt.Sprintf("failed to rollback %q: %v", c.NewName, rbErr))
 				}

@@ -1,23 +1,66 @@
 package template
 
 import (
+	"encoding/json"
 	"fmt"
+
 	"github.com/omegaatt36/dub/internal/domain"
 )
 
-templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPattern bool) {
-	<div id="file-list" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full overflow-hidden shadow-sm" style="--wails-drop-target: drop;">
-		<div class="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0 flex justify-between items-center">
-			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200 tracking-wide">
+// FileList renders the source-of-truth table: every visible file, its proposed
+// new name, and a tick box. Unticked rows stay in place (dimmed) so the user can
+// see what they excluded and re-tick it, rather than having rows disappear.
+templ FileList(
+	files []domain.FileItem,
+	selected map[string]bool,
+	previews []domain.RenamePreview,
+	hasPattern bool,
+	tickedCount int,
+) {
+	<div
+		id="file-list"
+		class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full min-h-0 overflow-hidden shadow-sm"
+		style="--wails-drop-target: drop;"
+	>
+		<div class="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0 flex items-center gap-3">
+			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200 tracking-wide shrink-0">
 				if hasPattern {
-					Matched Files
+					Matched
 				} else {
 					Files
 				}
-				<span class="ml-2 text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">{ fmt.Sprintf("%d", len(files)) }</span>
 			</h3>
+			<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">{ fmt.Sprintf("%d", len(files)) }</span>
+			if tickedCount > 0 && tickedCount < len(files) {
+				<span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">{ fmt.Sprintf("%d", tickedCount) } selected</span>
+			}
+			<div class="ml-auto flex items-center gap-1">
+				<button
+					type="button"
+					class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+					hx-post="/api/tick-all"
+					hx-vals='{"ticked": "true"}'
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					disabled={ len(files) == 0 }
+				>
+					Select all
+				</button>
+				<span class="text-gray-300 dark:text-gray-600 text-xs" aria-hidden="true">·</span>
+				<button
+					type="button"
+					class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+					hx-post="/api/tick-all"
+					hx-vals='{"ticked": "false"}'
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					disabled={ len(files) == 0 }
+				>
+					Clear
+				</button>
+			</div>
 		</div>
-		<div class="flex-1 overflow-auto relative">
+		<div data-dub-scroll="file-list" class="flex-1 overflow-auto relative min-h-0">
 			if len(files) == 0 {
 				<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8">
 					<svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
@@ -28,103 +71,147 @@ templ FileList(files []domain.FileItem, previews []domain.RenamePreview, hasPatt
 					}
 				</div>
 			} else if len(previews) > 0 {
-				<table class="w-full text-sm text-left border-collapse" aria-label="Rename preview">
-					<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-						<tr>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Original</th>
-							<th class="px-2 py-3 border-b border-gray-200 dark:border-gray-700 w-8"></th>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">New Name</th>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right w-24">Size</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-						for i, p := range previews {
-							<tr
-								class={ "group transition-colors duration-150 hover:bg-gray-100/50 dark:hover:bg-gray-700/50",
-								templ.KV("bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20", p.Conflict),
-								templ.KV("bg-white dark:bg-gray-800", !p.Conflict && i % 2 == 0),
-								templ.KV("bg-gray-50 dark:bg-gray-800/50", !p.Conflict && i % 2 != 0) }
-								if p.Conflict {
-									aria-label="Conflict: duplicate filename"
-								}
-							>
-								<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300 group-hover:text-gray-900 dark:group-hover:text-gray-100">
-									<div class="flex items-center gap-2.5">
-										@FileIcon(domain.FileTypeIcon(files[i].Extension))
-										if len(p.OriginalDiff) > 0 {
-											@DiffSegments(p.OriginalDiff)
-										} else {
-											<span class="truncate" title={ p.OriginalName }>{ p.OriginalName }</span>
-										}
-									</div>
-								</td>
-								<td class="px-2 py-2.5 text-center">
-									if p.Conflict {
-										<div class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400" title="Conflict">
-											<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-										</div>
-									} else if p.OriginalName != p.NewName {
-										<span class="text-gray-400 dark:text-gray-500 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">➝</span>
-									}
-								</td>
-								<td class="px-4 py-2.5 max-w-xs truncate">
-									if p.Conflict {
-										<span class="text-red-600 dark:text-red-400 font-medium" title="Conflict">{ p.NewName }</span>
-									} else if len(p.NewDiff) > 0 {
-										@DiffSegments(p.NewDiff)
-									} else if p.OriginalName != p.NewName {
-										<span class="text-emerald-600 dark:text-emerald-400 font-medium">{ p.NewName }</span>
-									} else {
-										<span class="text-gray-400 dark:text-gray-500">{ p.NewName }</span>
-									}
-								</td>
-								<td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs font-mono">
-									@FormatSize(files[i].Size)
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
+				@previewTable(files, previews)
 			} else {
-				<table class="w-full text-sm text-left border-collapse" aria-label="File list">
-					<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
-						<tr>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Name</th>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 w-24">Ext</th>
-							<th class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right w-24">Size</th>
-						</tr>
-					</thead>
-					<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-						for _, f := range files {
-							<tr class="transition-colors duration-150 hover:bg-gray-100/50 dark:hover:bg-gray-700/50">
-								<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300">
-									<div class="flex items-center gap-2.5">
-										@FileIcon(domain.FileTypeIcon(f.Extension))
-										<span class="truncate" title={ f.Name }>{ f.Name }</span>
-									</div>
-								</td>
-								<td class="px-4 py-2.5 text-gray-500 dark:text-gray-400 text-xs">{ f.Extension }</td>
-								<td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs font-mono">
-									@FormatSize(f.Size)
-								</td>
-							</tr>
-						}
-					</tbody>
-				</table>
+				@nameTable(files, selected)
 			}
 		</div>
 	</div>
 }
 
+templ previewTable(files []domain.FileItem, previews []domain.RenamePreview) {
+	<table class="w-full text-sm text-left border-collapse" aria-label="Rename preview">
+		<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+			<tr>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Original</th>
+				<th scope="col" class="px-2 py-3 border-b border-gray-200 dark:border-gray-700 w-8"><span class="sr-only">Status</span></th>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">New Name</th>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right w-24">Size</th>
+			</tr>
+		</thead>
+		<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+			for i, p := range previews {
+				<tr
+					class={ "group transition-colors duration-150",
+						templ.KV("bg-red-50 dark:bg-red-900/15", p.Conflict),
+						templ.KV("hover:bg-gray-100/50 dark:hover:bg-gray-700/50", !p.Conflict) }
+				>
+					<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300">
+						<div class="flex items-center gap-2.5">
+							@FileIcon(domain.FileTypeIcon(files[i].Extension))
+							if len(p.OriginalDiff) > 0 {
+								@DiffSegments(p.OriginalDiff)
+							} else {
+								<span class="truncate" title={ p.OriginalName }>{ p.OriginalName }</span>
+							}
+						</div>
+					</td>
+					<td class="px-2 py-2.5 text-center">
+						if p.Conflict {
+							<div class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 dark:bg-red-500/20 text-red-600 dark:text-red-400" title="Another file already has this name">
+								<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+							</div>
+						} else if p.OriginalName != p.NewName {
+							<span class="text-gray-400 dark:text-gray-500" aria-hidden="true">→</span>
+						}
+					</td>
+					<td class="px-4 py-2.5 max-w-xs truncate">
+						if p.Conflict {
+							<span class="text-red-600 dark:text-red-400 font-medium" title="Another file already has this name">{ p.NewName }</span>
+						} else if len(p.NewDiff) > 0 {
+							@DiffSegments(p.NewDiff)
+						} else if p.OriginalName != p.NewName {
+							<span class="text-emerald-700 dark:text-emerald-400 font-medium">{ p.NewName }</span>
+						} else {
+							<span class="text-gray-400 dark:text-gray-500">{ p.NewName }</span>
+						}
+					</td>
+					<td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs font-mono">
+						@FormatSize(files[i].Size)
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+templ nameTable(files []domain.FileItem, selected map[string]bool) {
+	<table class="w-full text-sm text-left border-collapse" aria-label="File list">
+		<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
+			<tr>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 w-10">
+					<span class="sr-only">Selected</span>
+				</th>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Name</th>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 text-right w-24">Size</th>
+			</tr>
+		</thead>
+		<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
+			for _, f := range files {
+				// Previews are absent here, so previews[i] cannot be indexed; look
+				// the row up by path instead of by position.
+				<tr class={ "transition-colors duration-150",
+					templ.KV("bg-gray-100/60 dark:bg-gray-900/30 opacity-60", !selected[f.Path]) }>
+					<td class="px-4 py-2">
+						<input
+							type="checkbox"
+							checked={ selected[f.Path] }
+							hx-post="/api/tick"
+							hx-vals={ tickVals(f.Path, selected[f.Path]) }
+							hx-target="#main-content"
+							hx-swap="innerHTML"
+							aria-label={ tickLabel(f) }
+							class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
+						/>
+					</td>
+					<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300">
+						<div class="flex items-center gap-2.5">
+							@FileIcon(domain.FileTypeIcon(f.Extension))
+							<span class="truncate" title={ f.Name }>{ f.Name }</span>
+						</div>
+					</td>
+					<td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs font-mono">
+						@FormatSize(f.Size)
+					</td>
+				</tr>
+			}
+		</tbody>
+	</table>
+}
+
+// tickVals builds the htmx value map for a tick toggle. hx-vals is static, so
+// it cannot observe the post-click state; the server therefore sends the
+// inverse of the state it just rendered.
+func tickVals(path string, currentlySelected bool) string {
+	next := "false"
+	if !currentlySelected {
+		next = "true"
+	}
+	payload, err := json.Marshal(map[string]string{
+		"path":   path,
+		"ticked": next,
+	})
+	if err != nil {
+		// A path that cannot be JSON-encoded cannot round-trip through the form
+		// either, so the click simply does nothing rather than sending garbage.
+		return "{}"
+	}
+	return string(payload)
+}
+
+func tickLabel(f domain.FileItem) string {
+	return fmt.Sprintf("Include %s in the rename", f.Name)
+}
+
 templ DiffSegments(segments []domain.DiffSegment) {
 	for _, seg := range segments {
 		switch seg.Type {
-			case domain.DiffEqual:
-				<span>{ seg.Text }</span>
-			case domain.DiffDelete:
-				<span class="bg-red-200 dark:bg-red-900/40 text-red-500 dark:text-red-400 line-through rounded-sm px-0.5">{ seg.Text }</span>
-			case domain.DiffInsert:
-				<span class="bg-emerald-200 dark:bg-emerald-500/20 text-emerald-500 dark:text-emerald-400 rounded-sm px-0.5">{ seg.Text }</span>
+		case domain.DiffEqual:
+			<span>{ seg.Text }</span>
+		case domain.DiffDelete:
+			<span class="bg-red-200 dark:bg-red-900/40 text-red-700 dark:text-red-400 line-through rounded-sm px-0.5">{ seg.Text }</span>
+		case domain.DiffInsert:
+			<span class="bg-emerald-200 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 rounded-sm px-0.5">{ seg.Text }</span>
 		}
 	}
 }

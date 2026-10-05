@@ -1,11 +1,36 @@
 version: "3"
 
+vars:
+  TAGS: webkit2_41
+
 tasks:
+  default:
+    cmds:
+      - task: fmt
+      - task: check
+      - task: test
+  fmt:
+    cmds:
+      - go tool golangci-lint fmt
+      - go mod tidy
+  check:
+    cmds:
+      - go vet -all -tags {{.TAGS}} ./...
+      - go tool golangci-lint run
+      - go tool govulncheck -tags={{.TAGS}} ./...
+  test:
+    cmds:
+      - go test -race -tags {{.TAGS}} ./...
   generate:
+    desc: Generate templ files and build the frontend assets
+    cmds:
+      - task: templ
+      - task: css
+      - task: htmx
+  templ:
     desc: Generate templ files
     cmds:
-      - templ generate
-
+      - go tool templ generate
   css:
     desc: Build Tailwind CSS
     cmds:
@@ -16,54 +41,23 @@ tasks:
       - web/index.html
     generates:
       - web/static/css/app.css
-
   htmx:
     desc: Vendor htmx.min.js (pinned version)
     vars:
       HTMX_VERSION: 4.0.0
     cmds:
       - curl -fsSL https://unpkg.com/htmx.org@{{.HTMX_VERSION}}/dist/htmx.min.js -o web/static/js/htmx.min.js
-
-  frontend-prep:
-    desc: Prepare frontend assets
-    deps: [css, htmx]
-    cmds:
-      - mkdir -p frontend/dist
-      - cp web/index.html frontend/dist/
-      - cp -r web/static frontend/dist/
-
   dev:
-    desc: Run development server
-    deps: [generate, frontend-prep]
+    desc: Run the app with templ and Tailwind watchers
+    deps: [generate]
     cmds:
-      - templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev -tags webkit2_41
-
-  test:
-    desc: Run tests
-    cmds:
-      - go test -v ./internal/... ./app/...
-
-  test-coverage:
-    desc: Run tests with coverage
-    cmds:
-      - go test -cover ./internal/... ./app/...
-
+      - go tool templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev -tags {{.TAGS}}
   build:
     desc: Build the application
-    deps: [generate, frontend-prep]
+    deps: [generate]
     cmds:
-      - wails build -tags webkit2_41
-
+      - wails build -tags {{.TAGS}}
   clean:
     desc: Clean build artifacts
     cmds:
-      - rm -rf build/ frontend/dist/
-
-  fmt:
-    cmds:
-      - golangci-lint fmt ./...
-      - go mod tidy
-
-  lint:
-    cmds:
-      - golangci-lint run ./...
+      - rm -rf build/

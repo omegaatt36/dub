@@ -10,6 +10,7 @@ import (
 
 	"github.com/omegaatt36/dub/internal/domain"
 	"github.com/omegaatt36/dub/internal/mock"
+	"github.com/omegaatt36/dub/internal/port"
 )
 
 func TestRenamerService_PreviewRename(t *testing.T) {
@@ -24,7 +25,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"new1", "new2"}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		require.Len(t, previews, 2)
 		assert.Equal(t, "new1.txt", previews[0].NewName)
@@ -37,7 +38,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"new.txt"}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		assert.Equal(t, "new.txt", previews[0].NewName, "should not double extension")
 	})
@@ -50,7 +51,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"same", "same", "unique"}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		assert.True(t, previews[0].Conflict, "first duplicate should be conflict")
 		assert.True(t, previews[1].Conflict, "second duplicate should be conflict")
@@ -61,7 +62,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		files := []domain.FileItem{{Name: "a.txt"}}
 		names := []string{"new1", "new2"}
 
-		_, err := svc.PreviewRename(files, names)
+		_, err := svc.PreviewRename(files, names, port.KeepExtension)
 		assert.ErrorIs(t, err, domain.ErrMismatchedNames)
 	})
 
@@ -71,7 +72,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{""}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		assert.Equal(t, "keep.txt", previews[0].NewName, "empty name should keep original")
 	})
@@ -82,7 +83,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"../evil"}
 
-		_, err := svc.PreviewRename(files, names)
+		_, err := svc.PreviewRename(files, names, port.KeepExtension)
 		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
 	})
 
@@ -92,7 +93,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"sub/file"}
 
-		_, err := svc.PreviewRename(files, names)
+		_, err := svc.PreviewRename(files, names, port.KeepExtension)
 		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
 	})
 
@@ -102,7 +103,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"sub\\file"}
 
-		_, err := svc.PreviewRename(files, names)
+		_, err := svc.PreviewRename(files, names, port.KeepExtension)
 		assert.ErrorIs(t, err, domain.ErrInvalidFileName)
 	})
 
@@ -112,7 +113,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{"vacation_001"}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		require.NotNil(t, previews[0].OriginalDiff)
 		require.NotNil(t, previews[0].NewDiff)
@@ -153,7 +154,7 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		}
 		names := []string{""}
 
-		previews, err := svc.PreviewRename(files, names)
+		previews, err := svc.PreviewRename(files, names, port.KeepExtension)
 		require.NoError(t, err)
 		assert.Nil(t, previews[0].OriginalDiff, "unchanged name should have no diff")
 		assert.Nil(t, previews[0].NewDiff, "unchanged name should have no diff")
@@ -282,4 +283,91 @@ func TestRenamerService_ExecuteRename(t *testing.T) {
 		assert.False(t, result.RolledBack)
 		assert.Empty(t, result.RollbackErrors)
 	})
+}
+
+// TestPreviewRenameExtensionPolicy locks in the two extension behaviours. The
+// UseProposed case is the bug this policy exists for: "photo_1.webp" on a .jpg
+// used to become "photo_1.webp.jpg".
+func TestPreviewRenameExtensionPolicy(t *testing.T) {
+	files := []domain.FileItem{
+		{Name: "photo.jpg", Path: "/dir/photo.jpg", Extension: ".jpg"},
+	}
+
+	tests := []struct {
+		name     string
+		policy   port.ExtensionPolicy
+		proposed string
+		want     string
+	}{
+		{
+			name:     "keep appends the original extension",
+			policy:   port.KeepExtension,
+			proposed: "trip_1.webp",
+			want:     "trip_1.webp.jpg",
+		},
+		{
+			name:     "keep does not double an identical extension",
+			policy:   port.KeepExtension,
+			proposed: "trip_1.jpg",
+			want:     "trip_1.jpg",
+		},
+		{
+			name:     "keep is case insensitive about the suffix",
+			policy:   port.KeepExtension,
+			proposed: "trip_1.JPG",
+			want:     "trip_1.JPG",
+		},
+		{
+			name:     "proposed honours a new extension",
+			policy:   port.UseProposedExtension,
+			proposed: "trip_1.webp",
+			want:     "trip_1.webp",
+		},
+		{
+			name:     "proposed leaves an extensionless name alone",
+			policy:   port.UseProposedExtension,
+			proposed: "trip_1",
+			want:     "trip_1",
+		},
+		{
+			name:     "empty proposal always keeps the original name",
+			policy:   port.UseProposedExtension,
+			proposed: "   ",
+			want:     "photo.jpg",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := NewRenamerService(nil)
+			previews, err := svc.PreviewRename(files, []string{tt.proposed}, tt.policy)
+			require.NoError(t, err)
+			require.Len(t, previews, 1)
+			assert.Equal(t, tt.want, previews[0].NewName)
+		})
+	}
+}
+
+// TestPreviewRenameRejectsUnsafeNames guards path traversal and empty names,
+// which matter more once a user can type an arbitrary extension.
+func TestPreviewRenameRejectsUnsafeNames(t *testing.T) {
+	tests := []struct {
+		name     string
+		proposed string
+	}{
+		{name: "parent traversal", proposed: "../escape"},
+		{name: "forward slash", proposed: "sub/dir"},
+		{name: "backslash", proposed: `sub\dir`},
+		{name: "nul byte", proposed: "bad\x00name"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			files := []domain.FileItem{{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"}}
+			svc := NewRenamerService(nil)
+			_, err := svc.PreviewRename(files, []string{tt.proposed}, port.UseProposedExtension)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, domain.ErrInvalidFileName)
+		})
+	}
 }

@@ -1,123 +1,164 @@
 package template
 
-import "github.com/omegaatt36/dub/internal/domain"
+import "fmt"
 
-templ Actions(hasFiles bool, hasNames bool, hasPreviews bool, result *domain.RenameResult, canUndo bool, hasConflicts bool) {
-	<div id="actions" class="bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm mt-auto">
-		<div class="flex items-center justify-end gap-3">
-			if hasPreviews && !hasConflicts {
-				<!-- Two-step confirm: click once to reveal, click again to execute -->
+// Actions is the full-width footer bar. It owns the only destructive control in
+// the app, so it states the blast radius ("N files") and any blocking problem
+// (conflicts) before the button, not in a tooltip after the click.
+templ Actions(data PageData) {
+	<div class="shrink-0 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-2.5 flex items-center gap-4">
+		<div class="flex items-center gap-2 text-sm min-w-0">
+			@statusSummary(data)
+		</div>
+		<div class="ml-auto flex items-center gap-2 shrink-0">
+			if data.CanUndo && len(data.Previews) == 0 {
 				<button
 					type="button"
-					id="execute-btn"
-					class="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2.5 rounded-md text-sm font-semibold shadow-lg shadow-emerald-900/30 transition-all transform active:scale-95 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-emerald-500"
-					onclick="this.style.display='none'; document.getElementById('confirm-execute').style.display='flex';"
-				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-					Execute Rename
-				</button>
-				<div id="confirm-execute" class="items-center gap-3 bg-gray-100 dark:bg-gray-900/50 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700" style="display:none;">
-					<span class="text-gray-900 dark:text-gray-300 text-sm font-medium px-2">Are you sure?</span>
-					<button
-						type="button"
-						class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded text-sm font-medium transition-colors shadow-sm focus-visible:ring-2 focus-visible:ring-emerald-500"
-						hx-post="/api/execute"
-						hx-target="#main-content"
-						hx-swap="innerHTML"
-					>
-						Yes, do it
-					</button>
-					<button
-						type="button"
-						class="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-900 dark:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors border border-gray-200 dark:border-gray-600 focus-visible:ring-2 focus-visible:ring-gray-400"
-						onclick="this.parentElement.style.display='none'; document.getElementById('execute-btn').style.display='inline-flex';"
-					>
-						Cancel
-					</button>
-				</div>
-				<button
-					type="button"
-					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-gray-400 rounded"
-					hx-post="/api/preview"
-					hx-target="#main-content"
-					hx-swap="innerHTML"
-					hx-vals='{"clear": "true"}'
-				>
-					Reset
-				</button>
-			}
-			if hasPreviews && hasConflicts {
-				<button
-					type="button"
-					class="bg-gray-400 dark:bg-gray-600 text-white px-6 py-2.5 rounded-md text-sm font-semibold cursor-not-allowed opacity-60 flex items-center gap-2"
-					disabled
-					title="Resolve conflicts before executing"
-				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-					Execute Rename
-				</button>
-				<button
-					type="button"
-					class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-4 py-2 text-sm font-medium transition-colors hover:underline focus-visible:ring-2 focus-visible:ring-gray-400 rounded"
-					hx-post="/api/preview"
-					hx-target="#main-content"
-					hx-swap="innerHTML"
-					hx-vals='{"clear": "true"}'
-				>
-					Reset
-				</button>
-			}
-			if canUndo && !hasPreviews {
-				<button
-					type="button"
-					class="bg-amber-600 hover:bg-amber-500 text-white px-5 py-2.5 rounded-md text-sm font-semibold shadow-lg transition-all transform active:scale-95 flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-amber-500"
+					class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-amber-500"
 					hx-post="/api/undo"
 					hx-target="#main-content"
 					hx-swap="innerHTML"
+					title="Undo the last rename (⌘Z)"
 				>
-					<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
-					Undo Rename
+					Undo
 				</button>
 			}
-			if !hasFiles {
-				<span class="text-gray-500 dark:text-gray-400 text-sm italic py-2">Select a directory to get started.</span>
-			} else if !hasNames {
-				<span class="text-gray-500 dark:text-gray-400 text-sm italic py-2">Set new names to continue.</span>
+			if len(data.Previews) > 0 {
+				<button
+					type="button"
+					class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-gray-400"
+					hx-post="/api/preview"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					hx-vals='{"clear": "true"}'
+				>
+					Discard
+				</button>
+			}
+			if data.ConflictCount > 0 {
+				<span
+					class="bg-gray-300 dark:bg-gray-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold cursor-not-allowed opacity-70 inline-flex items-center gap-2"
+					aria-disabled="true"
+					title="Rename is blocked until the conflicting names above are made unique"
+				>
+					Resolve { fmt.Sprintf("%d", data.ConflictCount) } conflict{ plural(data.ConflictCount) }
+				</span>
+			} else if len(data.Previews) > 0 {
+				@confirmExecute(data)
 			}
 		</div>
-		if result != nil {
-			<div
-				class={ "mt-4 p-4 rounded-md text-sm shadow-md flex items-start gap-3",
-				templ.KV("bg-emerald-50/50 dark:bg-emerald-900/20 border border-emerald-200/50 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-200", result.Success),
-				templ.KV("bg-amber-50/50 dark:bg-amber-900/20 border border-amber-200/50 dark:border-amber-500/30 text-amber-800 dark:text-amber-200", !result.Success && result.RolledBack),
-				templ.KV("bg-red-50/50 dark:bg-red-900/20 border border-red-200/50 dark:border-red-500/30 text-red-800 dark:text-red-200", !result.Success && !result.RolledBack) }
-			>
-				if result.Success {
-					<svg class="w-5 h-5 text-emerald-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-				} else if result.RolledBack {
-					<svg class="w-5 h-5 text-amber-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
-				} else {
-					<svg class="w-5 h-5 text-red-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-				}
-				<div>
-					<p class="font-semibold">{ result.Message }</p>
-					if len(result.Errors) > 0 {
-						<ul class="mt-2 list-disc list-inside text-xs opacity-90 space-y-1">
-							for _, e := range result.Errors {
-								<li>{ e }</li>
-							}
-						</ul>
-					}
-					if len(result.RollbackErrors) > 0 {
-						<p class="mt-2 font-medium text-red-600 dark:text-red-400 text-xs">Rollback errors:</p>
-						<ul class="mt-1 list-disc list-inside text-xs opacity-90 space-y-1">
-							for _, e := range result.RollbackErrors {
-								<li>{ e }</li>
-							}
-						</ul>
-					}
-				</div>
-			</div>
+		if data.Result != nil {
+			@resultBanner(data)
 		}
 	</div>
+}
+
+// statusSummary tells the user what a click would do before they click it.
+templ statusSummary(data PageData) {
+	if data.SelectedDirectory == "" {
+		<span class="text-gray-500 dark:text-gray-400 italic">Select a directory to get started.</span>
+	} else if len(data.VisibleFiles) == 0 {
+		<span class="text-gray-500 dark:text-gray-400 italic">No files match the current filter.</span>
+	} else if len(data.Previews) > 0 {
+		<span class="text-gray-600 dark:text-gray-300">
+			Ready to rename <span class="font-semibold text-gray-900 dark:text-gray-100">{ fmt.Sprintf("%d", len(data.Previews)) }</span> file{ plural(len(data.Previews)) }
+		</span>
+	} else if data.TickedCount > 0 {
+		<span class="text-gray-600 dark:text-gray-300">
+			<span class="font-semibold text-gray-900 dark:text-gray-100">{ fmt.Sprintf("%d", data.TickedCount) }</span> of { fmt.Sprintf("%d", len(data.VisibleFiles)) } selected — set new names to continue
+		</span>
+	} else {
+		<span class="text-gray-500 dark:text-gray-400 italic">Tick the files you want to rename.</span>
+	}
+}
+
+// confirmExecute is a two-step confirm for the only destructive action in the
+// app. Both steps are server-rendered; the confirm half is hidden with the
+// dedicated [hidden] attribute rather than a utility class, because that is
+// state the JS toggles directly and a class swap would silently no-op if the
+// class were ever dropped from the markup.
+templ confirmExecute(data PageData) {
+	<div id="execute-confirm" hidden class="flex items-center gap-2">
+		<span class="text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap" role="status">
+			Rename { fmt.Sprintf("%d", len(data.Previews)) } file{ plural(len(data.Previews)) }?
+		</span>
+		<button
+			type="button"
+			class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md text-sm font-semibold shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500"
+			hx-post="/api/execute"
+			hx-target="#main-content"
+			hx-swap="innerHTML"
+		>
+			Yes, rename
+		</button>
+		<button
+			type="button"
+			class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-gray-400"
+			onclick="window.__dubConfirm(false)"
+		>
+			Cancel
+		</button>
+		if data.ExtChangeCount > 0 {
+			<span class="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-700/50 rounded px-2 py-1 whitespace-nowrap" role="alert">
+				<svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+				{ fmt.Sprintf("%d", data.ExtChangeCount) } extension{ plural(data.ExtChangeCount) } will change; contents are not converted
+			</span>
+		}
+	</div>
+	<button
+		id="execute-btn"
+		type="button"
+		class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-1.5 rounded-md text-sm font-semibold shadow-md shadow-emerald-900/20 transition-all active:scale-95 inline-flex items-center gap-2 focus-visible:ring-2 focus-visible:ring-emerald-500"
+		onclick="window.__dubConfirm(true)"
+	>
+		<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+		Execute Rename
+	</button>
+}
+
+templ resultBanner(data PageData) {
+	if data.Result.Success {
+		<div class="fixed bottom-16 right-4 bg-emerald-50 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="status">
+			<svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+			<div>
+				<p class="text-sm font-semibold">{ data.Result.Message }</p>
+				if len(data.Result.Errors) > 0 {
+					<ul class="mt-1 list-disc list-inside text-xs opacity-90 space-y-0.5">
+						for _, e := range data.Result.Errors {
+							<li>{ e }</li>
+						}
+					</ul>
+				}
+			</div>
+		</div>
+	} else {
+		<div class="fixed bottom-16 right-4 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="alert">
+			<svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
+			<div>
+				<p class="text-sm font-semibold">{ data.Result.Message }</p>
+				if len(data.Result.Errors) > 0 {
+					<ul class="mt-1 list-disc list-inside text-xs opacity-90 space-y-0.5">
+						for _, e := range data.Result.Errors {
+							<li>{ e }</li>
+						}
+					</ul>
+				}
+				if len(data.Result.RollbackErrors) > 0 {
+					<p class="mt-1 font-medium text-xs">Rollback also failed:</p>
+					<ul class="mt-0.5 list-disc list-inside text-xs opacity-90 space-y-0.5">
+						for _, e := range data.Result.RollbackErrors {
+							<li>{ e }</li>
+						}
+					</ul>
+				}
+			</div>
+		</div>
+	}
+}
+
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
