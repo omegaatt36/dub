@@ -1,7 +1,15 @@
-version: "3"
+version: '3'
 
 vars:
-  TAGS: webkit2_41
+  APP_NAME: dub
+  BIN_DIR: bin
+  MACOS_MIN_VERSION: "13.0"
+  GOOS: '{{.GOOS | default OS}}'
+
+includes:
+  common: ./build/Taskfile.yml
+  darwin: ./build/darwin/Taskfile.yml
+  linux: ./build/linux/Taskfile.yml
 
 tasks:
   default:
@@ -15,49 +23,37 @@ tasks:
       - go mod tidy
   check:
     cmds:
-      - go vet -all -tags {{.TAGS}} ./...
+      - go vet -all ./...
       - go tool golangci-lint run
-      - go tool govulncheck -tags={{.TAGS}} ./...
+      - go tool govulncheck ./...
   test:
     cmds:
-      - go test -race -tags {{.TAGS}} ./...
+      - go test -race ./...
   generate:
     desc: Generate templ files and build the frontend assets
     cmds:
-      - task: templ
-      - task: css
-      - task: htmx
-  templ:
-    desc: Generate templ files
-    cmds:
-      - go tool templ generate
-  css:
-    desc: Build Tailwind CSS
-    cmds:
-      - ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --minify
-    sources:
-      - web/static/css/input.css
-      - web/template/**/*.templ
-      - web/index.html
-    generates:
-      - web/static/css/app.css
-  htmx:
-    desc: Vendor htmx.min.js (pinned version)
-    vars:
-      HTMX_VERSION: 4.0.0
-    cmds:
-      - curl -fsSL https://unpkg.com/htmx.org@{{.HTMX_VERSION}}/dist/htmx.min.js -o web/static/js/htmx.min.js
+      - task: common:build:frontend
   dev:
     desc: Run the app with templ and Tailwind watchers
     deps: [generate]
+    # --minify has to match the css task. The watcher writes the same committed
+    # file the build writes, so without it `task dev` leaves an unminified
+    # app.css in the working tree and the next build shows a whole-file diff.
     cmds:
-      - go tool templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --watch & wails dev -tags {{.TAGS}}
+      - go tool templ generate -watch & ./tailwindcss -i web/static/css/input.css -o web/static/css/app.css --minify --watch & go run .
   build:
     desc: Build the application
-    deps: [generate]
     cmds:
-      - wails build -tags {{.TAGS}}
+      - task: "{{.GOOS}}:build"
+  package:
+    desc: Package a production build of the application
+    cmds:
+      - task: "{{.GOOS}}:package"
+  run:
+    desc: Run the built application
+    cmds:
+      - task: "{{.GOOS}}:run"
   clean:
     desc: Clean build artifacts
     cmds:
-      - rm -rf build/
+      - rm -rf bin/

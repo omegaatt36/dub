@@ -86,9 +86,10 @@
     background: rgba(107, 114, 128, 0.8);
 }
 
-/* Wails drag & drop target highlight — only on file list and upload area */
-#file-list.wails-drop-target-active,
-[data-drop-names].wails-drop-target-active {
+/* Wails drag & drop highlight. Wails marks whichever data-file-drop-target
+   zone the pointer is inside, so one selector covers the scan zone and the
+   names upload area nested inside it. */
+.file-drop-target-active {
     outline: 3px dashed #4385be;
     outline-offset: -3px;
     background-color: rgba(67, 133, 190, 0.05);

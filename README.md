@@ -63,13 +63,18 @@ Files sort naturally, so `file_2` comes before `file_10`.
 Common tasks are defined in `Taskfile.yml` and run through [Task](https://taskfile.dev/).
 
 ```sh
-task dev    # templ + tailwind watchers, then wails dev
-task build  # production build
-task test   # go test -race -tags webkit2_41 ./...
-task check  # go vet, golangci-lint, govulncheck
+task dev      # templ + tailwind watchers, then go run .
+task build    # production build via wails3
+task package  # .dmg on macOS, .tar.gz on Linux
+task test     # go test -race ./...
+task check    # go vet, golangci-lint, govulncheck
 ```
 
-You need [Go](https://go.dev/dl/) 1.27+, [Task](https://taskfile.dev/), the [Wails](https://wails.io/docs/gettingstarted/installation) CLI, and the Tailwind CSS standalone CLI at `./tailwindcss` in the repository root. Templ, golangci-lint, and govulncheck come from `go.mod`, so `go tool` resolves them for you.
+You need [Go](https://go.dev/dl/) 1.27+, [Task](https://taskfile.dev/), the [Wails v3](https://v3.wails.io/getting-started/installation/) CLI (`wails3`), and the Tailwind CSS standalone CLI at `./tailwindcss` in the repository root. Templ, golangci-lint, and govulncheck come from `go.mod`, so `go tool` resolves them for you.
+
+There is no `wails3 dev` task: that command expects a frontend dev server to proxy to, and dub has no bundler. `task dev` runs the watchers and the app directly instead.
+
+Wails build settings live in `build/config.yml`, with the shared build steps in `build/Taskfile.yml` and the per-platform ones in `build/<goos>/Taskfile.yml`. Run `wails3 task common:update:build-assets` after changing the app metadata.
 
 `go build ./...` and `go test ./...` also work on a fresh clone: `main.go` embeds `web/index.html` and `web/static` directly, and the generated CSS plus vendored htmx are committed.
 

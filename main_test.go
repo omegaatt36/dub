@@ -10,38 +10,28 @@ import (
 	"strings"
 	"testing"
 
-	wailsassetserver "github.com/wailsapp/wails/v2/pkg/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-
 	"github.com/omegaatt36/dub/app"
 	osfs "github.com/omegaatt36/dub/internal/adapter/fs"
 	"github.com/omegaatt36/dub/internal/adapter/regex"
 	"github.com/omegaatt36/dub/internal/service"
 )
 
-// newTestAssetHandler builds the same asset server main.go hands to Wails:
-// the embedded assets in front, the application's Chi mux behind. Exercising
-// it here is what makes the leak checks below meaningful — they run the real
-// request chain, not a reimplementation of it.
+// newTestAssetHandler builds the same handler main.go hands to Wails: the
+// embedded assets at the root, the application's HTMX API under /api/. Running
+// it here is what makes the leak checks below meaningful — they exercise the
+// real request chain, not a reimplementation of it.
 func newTestAssetHandler(t *testing.T) http.Handler {
 	t.Helper()
 
 	fileSystem := &osfs.OSFileSystem{}
-	application := app.NewApp(
+	dub := app.NewApp(
 		fileSystem,
 		service.NewScannerService(fileSystem),
 		service.NewPatternService(&regex.Engine{}),
 		service.NewRenamerService(fileSystem),
 	)
 
-	handler, err := wailsassetserver.NewAssetHandler(assetserver.Options{
-		Assets:  assets,
-		Handler: application.GetHandler(),
-	}, nil)
-	if err != nil {
-		t.Fatalf("NewAssetHandler: %v", err)
-	}
-	return handler
+	return newAssetHandler(dub.GetHandler())
 }
 
 func get(t *testing.T, handler http.Handler, target string) (int, string) {
@@ -220,9 +210,9 @@ func TestAssetServerServesEveryEmbeddedStaticFile(t *testing.T) {
 	t.Logf("served %d embedded static files", served)
 }
 
-// TestAssetServerFallsThroughToAPIHandler confirms the API still wins for paths
-// the embedded FS does not hold, which is what keeps /api/* working now that
-// the FS is rooted at web/.
+// TestAssetServerFallsThroughToAPIHandler confirms the API still wins for its
+// own paths, which is what keeps /api/* working now that the FS is rooted at
+// web/.
 func TestAssetServerFallsThroughToAPIHandler(t *testing.T) {
 	handler := newTestAssetHandler(t)
 
@@ -232,5 +222,20 @@ func TestAssetServerFallsThroughToAPIHandler(t *testing.T) {
 	}
 	if !strings.Contains(body, "<") {
 		t.Errorf("GET /api/page did not return HTML, got:\n%s", body)
+	}
+}
+
+// TestAssetServerServesWailsRuntime pins the dependency index.html has on
+// /wails/runtime.js: Wails routes a desktop file drop to Go through code that
+// lives in that module, so a 404 here silently disables drag & drop.
+func TestAssetServerServesWailsRuntime(t *testing.T) {
+	handler := newTestAssetHandler(t)
+
+	code, body := get(t, handler, "/wails/runtime.js")
+	if code != http.StatusOK {
+		t.Fatalf("GET /wails/runtime.js = %d, want 200", code)
+	}
+	if len(body) == 0 {
+		t.Error("GET /wails/runtime.js served an empty body")
 	}
 }
