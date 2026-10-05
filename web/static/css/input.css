@@ -60,13 +60,6 @@
     opacity: 1;
 }
 
-/* Direction RTL for path truncation (show end of path) */
-.dir-rtl {
-    direction: rtl;
-    text-align: left;
-    unicode-bidi: plaintext;
-}
-
 /* Custom scrollbar */
 ::-webkit-scrollbar {
     width: 6px;

@@ -2,89 +2,54 @@ package template
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/omegaatt36/dub/internal/domain"
 )
 
-templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl string, searchPattern string, replacePattern string) {
-	<div id="names-editor" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full shadow-sm">
-		<div class="px-4 py-3 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shrink-0">
+// EditorData is everything the naming-rule panel needs. It is a struct rather
+// than a positional list because the panel already carries more inputs than
+// positional parameters stay readable for.
+type EditorData struct {
+	Files       []domain.FileItem
+	Names       []string
+	Method      string
+	Template    string
+	Search      string
+	Replace     string
+	AllowExtChange bool
+}
+
+templ NamesEditor(d EditorData) {
+	<div id="names-editor" class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full min-h-0 overflow-hidden shadow-sm">
+		<div class="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0 flex items-baseline gap-2">
 			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200">New Names</h3>
+			if len(d.Files) > 0 {
+				<span class="text-xs text-gray-500 dark:text-gray-400">{ fmt.Sprintf("%d", len(d.Files)) } selected</span>
+			}
 		</div>
-		<div class="p-4 flex flex-col h-full overflow-hidden">
-			<!-- Naming method tabs (Segmented Control) -->
-			<div class="flex p-1 mb-4 bg-gray-100 dark:bg-gray-900/80 rounded-lg border border-gray-200 dark:border-gray-700/50" role="tablist" aria-label="Naming method">
-				<button
-					type="button"
-					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
-						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "manual"),
-						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "manual") }
-					role="tab"
-					aria-selected={ boolStr(method == "manual") }
-					hx-post="/api/names"
-					hx-vals='{"method": "manual"}'
-					hx-target="#names-editor"
-					hx-swap="outerHTML"
-				>
-					Manual
-				</button>
-				<button
-					type="button"
-					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
-						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "file"),
-						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "file") }
-					role="tab"
-					aria-selected={ boolStr(method == "file") }
-					hx-post="/api/names"
-					hx-vals='{"method": "file"}'
-					hx-target="#names-editor"
-					hx-swap="outerHTML"
-				>
-					From File
-				</button>
-				<button
-					type="button"
-					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
-						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "template"),
-						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "template") }
-					role="tab"
-					aria-selected={ boolStr(method == "template") }
-					hx-post="/api/names"
-					hx-vals='{"method": "template"}'
-					hx-target="#names-editor"
-					hx-swap="outerHTML"
-				>
-					Template
-				</button>
-				<button
-					type="button"
-					class={ "flex-1 px-3 py-1.5 rounded-md text-xs font-medium transition-all duration-200",
-						templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", method == "findreplace"),
-						templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", method != "findreplace") }
-					role="tab"
-					aria-selected={ boolStr(method == "findreplace") }
-					hx-post="/api/names"
-					hx-vals='{"method": "findreplace"}'
-					hx-target="#names-editor"
-					hx-swap="outerHTML"
-				>
-					Find &amp; Replace
-				</button>
+		<div class="p-3 flex flex-col h-full min-h-0 overflow-hidden">
+			<div class="flex p-1 mb-3 bg-gray-100 dark:bg-gray-900/80 rounded-lg border border-gray-200 dark:border-gray-700/50 shrink-0" role="tablist" aria-label="Naming method">
+				@methodTab("Manual", "manual", d.Method)
+				@methodTab("From File", "file", d.Method)
+				@methodTab("Template", "template", d.Method)
+				@methodTab("Find & Replace", "findreplace", d.Method)
 			</div>
-			<div class="flex-1 overflow-y-auto min-h-0 relative">
-				if len(files) == 0 {
+			<div id="names-panel" data-dub-scroll="names-panel" class="flex-1 overflow-y-auto min-h-0" role="tabpanel" aria-labelledby={ tabID(d.Method) }>
+				if len(d.Files) == 0 {
 					<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
-						<p>Select a directory first.</p>
+						<p>Tick the files you want to rename.</p>
 					</div>
 				} else {
-					switch method {
+					switch d.Method {
 						case "manual":
-							@ManualEditor(files, names)
+							@ManualEditor(d.Files, d.Names)
 						case "file":
-							@FileEditor(names)
+							@FileEditor(d.Names)
 						case "template":
-							@TemplateEditor(tmpl, len(files), names)
+							@TemplateEditor(d)
 						case "findreplace":
-							@FindReplaceEditor(searchPattern, replacePattern, names)
+							@FindReplaceEditor(d)
 					}
 				}
 			</div>
@@ -92,6 +57,45 @@ templ NamesEditor(files []domain.FileItem, names []string, method string, tmpl s
 	</div>
 }
 
+// methodTab renders one tab of the naming-method tablist. It is a roving
+// tabindex: only the active tab is in the tab order, which is what lets
+// arrow-key navigation work without trapping focus.
+templ methodTab(label string, value string, current string) {
+	<button
+		id={ tabID(value) }
+		type="button"
+		role="tab"
+		aria-selected={ boolStr(value == current) }
+		aria-controls="names-panel"
+		tabindex={ tabIndex(value == current) }
+		data-method-tab={ value }
+		class={ "flex-1 px-2 py-1 rounded-md text-xs font-medium transition-all duration-200 focus-visible:ring-2 focus-visible:ring-blue-500",
+			templ.KV("bg-gray-200 dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm ring-1 ring-gray-200 dark:ring-white/10", value == current),
+			templ.KV("text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5", value != current) }
+		hx-post="/api/names"
+		hx-vals={ fmt.Sprintf(`{"method": %q}`, value) }
+		hx-target="#names-editor"
+		hx-swap="outerHTML"
+	>
+		{ label }
+	</button>
+}
+
+func tabIndex(isCurrent bool) string {
+	if isCurrent {
+		return "0"
+	}
+	return "-1"
+}
+
+func tabID(method string) string {
+	return "tab-" + method
+}
+
+// ManualEditor edits one name per ticked file. The file list beside it already
+// shows the resulting full filename, so this panel deliberately shows only the
+// stem — duplicating the list here is what made the two views disagree about
+// whether ".pdf" was included.
 templ ManualEditor(files []domain.FileItem, names []string) {
 	<form
 		id="manual-names-form"
@@ -103,31 +107,33 @@ templ ManualEditor(files []domain.FileItem, names []string) {
 		hx-vals='{"method": "manual", "action": "update"}'
 		hx-target="#main-content"
 		hx-swap="innerHTML"
-		class="h-full flex flex-col"
+		class="h-full flex flex-col min-h-0"
 	>
-		<div class="space-y-1 pr-1 pb-2">
+		<div data-dub-scroll="manual-names" class="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
 			for i, f := range files {
-				<div class="flex items-center gap-2 group">
-					<span class="text-xs text-gray-500 dark:text-gray-400 w-6 text-right shrink-0 font-mono group-hover:text-gray-400 dark:group-hover:text-gray-300 transition-colors">{ fmt.Sprintf("%d", i+1) }</span>
+				<div class="flex items-center gap-2">
+					<label for={ fmt.Sprintf("name-%d", i) } class="text-xs text-gray-500 dark:text-gray-400 w-5 text-right shrink-0 font-mono">{ fmt.Sprintf("%d", i+1) }</label>
 					<input
+						id={ fmt.Sprintf("name-%d", i) }
 						type="text"
 						name={ fmt.Sprintf("name_%d", i) }
 						value={ getName(names, i) }
-						placeholder={ f.Name }
+						placeholder={ strings.TrimSuffix(f.Name, f.Extension) }
 						spellcheck="false"
 						autocomplete="off"
-						class="flex-1 bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded px-2.5 py-1.5 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:bg-gray-50 dark:focus:bg-gray-900 transition-colors placeholder-gray-400 dark:placeholder-gray-600"
+						data-enter-next="true"
+						class="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-600"
 					/>
+					<span class="text-xs text-gray-400 dark:text-gray-500 font-mono shrink-0 truncate" title="The extension is kept automatically">{ f.Extension }</span>
 				</div>
 			}
 		</div>
-		<p class="text-xs text-gray-500 dark:text-gray-400 mt-2 text-center pt-2 border-t border-gray-200 dark:border-gray-700/50">Auto-saves on pause</p>
 	</form>
 }
 
 templ FileEditor(names []string) {
-	<div class="h-full flex flex-col">
-		<div data-drop-names class="bg-gray-100 dark:bg-gray-900/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-gray-900 transition-all cursor-pointer relative group mb-4" style="--wails-drop-target: drop;">
+	<div class="h-full flex flex-col min-h-0">
+		<div data-drop-names class="bg-gray-100 dark:bg-gray-900/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-gray-900 transition-all cursor-pointer relative group shrink-0" style="--wails-drop-target: drop;">
 			<input
 				type="file"
 				name="namesfile"
@@ -146,78 +152,113 @@ templ FileEditor(names []string) {
 				<div class="text-sm text-gray-500 dark:text-gray-400">
 					<span class="font-medium text-blue-600 dark:text-blue-400 group-hover:text-blue-700 dark:group-hover:text-blue-300">Click to upload</span> or drag and drop
 				</div>
-				<p class="text-xs text-gray-500 dark:text-gray-400">.txt or .csv (one name per line)</p>
+				<p class="text-xs text-gray-500 dark:text-gray-400">.txt or .csv, one name per line</p>
 			</div>
 		</div>
 		if len(names) > 0 {
-			<div class="flex-1 min-h-0 flex flex-col">
-				<h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
-				<div class="bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 flex-1 overflow-y-auto">
-					@NamesList(names)
-				</div>
-			</div>
+			<p class="text-xs text-gray-500 dark:text-gray-400 mt-3">
+				Loaded { fmt.Sprintf("%d", len(names)) } name{ plural(len(names)) }. The file list on the left shows how each one applies.
+			</p>
 		}
 	</div>
 }
 
-templ TemplateEditor(tmpl string, fileCount int, names []string) {
-	<div class="h-full flex flex-col">
-		<label class="block text-sm font-medium text-gray-900 dark:text-gray-300 mb-2">
+templ TemplateEditor(d EditorData) {
+	<div class="h-full flex flex-col min-h-0">
+		<label for="template-input" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
 			Pattern
 		</label>
 		<div class="flex gap-2 mb-2">
 			<input
+				id="template-input"
 				type="text"
 				name="template"
-				value={ tmpl }
+				value={ d.Template }
 				placeholder="name_{index}"
-				class="flex-1 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+				spellcheck="false"
+				autocomplete="off"
+				class="flex-1 min-w-0 bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-1.5 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
 			/>
 			<button
 				type="button"
-				class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+				class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shrink-0 focus-visible:ring-2 focus-visible:ring-blue-500"
 				hx-post="/api/names/generate"
-				hx-include="[name='template']"
+				hx-include="#template-input"
 				hx-target="#main-content"
 				hx-swap="innerHTML"
 			>
-				Generate
+				Apply
 			</button>
 		</div>
-		<div class="flex gap-2 mb-2 text-xs flex-wrap">
-			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Variables:</span>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{index}')">{ "{index}" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{original}')">{ "{original}" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{ext}')">{ "{ext}" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{date}')">{ "{date}" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToTemplate('{parent}')">{ "{parent}" }</code>
+		<div class="flex gap-1 mb-2 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1 self-center">Insert</span>
+			@tokenChip("{index}", "insert the file's position number")
+			@tokenChip("{original}", "insert the original name without its extension")
+			@tokenChip("{ext}", "insert the extension without the dot")
+			@tokenChip("{date}", "insert the file's modification date")
+			@tokenChip("{parent}", "insert the containing folder name")
 		</div>
-		<div class="flex gap-2 mb-4 text-xs flex-wrap">
-			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Modifiers:</span>
-			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|upper')">{ "|upper" }</code>
-			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|lower')">{ "|lower" }</code>
-			<code class="bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700/50 text-purple-700 dark:text-purple-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-purple-100 dark:hover:bg-purple-900/50" onclick="appendToTemplate('|title')">{ "|title" }</code>
+		<div class="flex gap-1 mb-1 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1 self-center">Format</span>
+			@tokenChip("{index:3}", "pad the number to three digits, e.g. 001")
+			@tokenChip("{date:20060102}", "format the date as 20231027")
 		</div>
-		if len(names) > 0 {
-			<div class="flex-1 min-h-0 flex flex-col">
-				<h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
-				<div class="bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 flex-1 overflow-y-auto">
-					@NamesList(names)
-				</div>
-			</div>
-		}
+		<div class="flex gap-1 mb-1 text-xs flex-wrap">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1 self-center">Case</span>
+			@tokenChip("{original|upper}", "uppercase the original name")
+			@tokenChip("{original|lower}", "lowercase the original name")
+			@tokenChip("{original|title}", "capitalize each word")
+		</div>
+		<p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+			Applies to { fmt.Sprintf("%d", len(d.Files)) } selected file{ plural(len(d.Files)) }.
+		</p>
+		@extensionToggle(d.AllowExtChange)
 	</div>
 }
 
-templ NamesList(names []string) {
-	<div class="space-y-0.5">
-		for i, name := range names {
-			<div class="flex items-center gap-2 text-sm py-0.5 px-1 hover:bg-gray-200 dark:hover:bg-gray-800 rounded">
-				<span class="text-xs text-gray-400 dark:text-gray-600 w-6 text-right shrink-0 font-mono">{ fmt.Sprintf("%d", i+1) }</span>
-				<span class="text-gray-900 dark:text-gray-300 truncate">{ name }</span>
-			</div>
+// extensionToggle is an explicit opt-in for changing a file's extension.
+		// Changing only the extension does not convert the file contents, so the
+	// default is off and the warning is part of the control rather than a tooltip.
+templ extensionToggle(allow bool) {
+	<label class="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 cursor-pointer group">
+	<input
+		type="checkbox"
+		checked={ allow }
+		hx-post="/api/extension-policy"
+		hx-vals={ extPolicyVals(allow) }
+		hx-target="#main-content"
+		hx-swap="innerHTML"
+		class="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer shrink-0"
+	/>
+	<span class="text-xs text-gray-600 dark:text-gray-400 leading-snug">
+		<span class="font-medium text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white">Allow changing the extension</span>
+		<br/>
+		Renaming a file does not convert its contents. A template ending in <code class="font-mono">.webp</code> would rename a <code class="font-mono">.jpg</code> file without re-encoding it.
+	</span>
+	</label>
+}
+
+func extPolicyVals(allow bool) string {
+			next := "false"
+			if !allow {
+				next = "true"
+			}
+			return fmt.Sprintf(`{"convert": %q}`, next)
 		}
-	</div>
+
+func appendToFindReplaceCall(field string, text string) string {
+	return field + "\x00" + text
+}
+templ tokenChip(token string, label string) {
+	<button
+		type="button"
+		title={ label }
+		aria-label={ label }
+		class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono hover:bg-gray-200 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+		data-append-to-template={ token }
+	>
+		{ token }
+	</button>
 }
 
 func getName(names []string, index int) string {
@@ -234,64 +275,73 @@ func boolStr(b bool) string {
 	return "false"
 }
 
-templ FindReplaceEditor(searchPattern string, replacePattern string, names []string) {
-	<div class="h-full flex flex-col">
-		<div class="space-y-3 mb-4">
+templ FindReplaceEditor(d EditorData) {
+	<div class="h-full flex flex-col min-h-0">
+		<div class="space-y-2 mb-3 shrink-0">
 			<div>
-				<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search (regex)</label>
+				<label for="fr-search" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Search (regex)</label>
 				<input
+					id="fr-search"
 					type="text"
 					name="search"
-					value={ searchPattern }
+					value={ d.Search }
 					placeholder="(\d+)-(\w+)"
 					spellcheck="false"
 					autocomplete="off"
-					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-1.5 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
 				/>
 			</div>
 			<div>
-				<label class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Replace</label>
+				<label for="fr-replace" class="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Replace</label>
 				<input
+					id="fr-replace"
 					type="text"
 					name="replace"
-					value={ replacePattern }
+					value={ d.Replace }
 					placeholder="$2_$1"
 					spellcheck="false"
 					autocomplete="off"
-					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2 text-sm font-mono focus:ring-blue-500 focus:border-blue-500 shadow-sm"
+					class="w-full bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-600 text-gray-900 dark:text-gray-100 rounded-md px-3 py-1.5 text-sm font-mono focus:ring-blue-500 focus:border-blue-500"
 				/>
 			</div>
 			<button
 				type="button"
-				class="w-full bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors shadow-sm"
+				class="w-full bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
 				hx-post="/api/names/findreplace"
-				hx-include="[name='search'], [name='replace']"
+				hx-include="#fr-search, #fr-replace"
 				hx-target="#main-content"
 				hx-swap="innerHTML"
 			>
 				Apply
 			</button>
 		</div>
-		<div class="flex gap-2 mb-4 text-xs flex-wrap">
-			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Groups:</span>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$1')">{ "$1" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$2')">{ "$2" }</code>
-			<code class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700" onclick="appendToFindReplace('replace', '$3')">{ "$3" }</code>
+		<div class="flex gap-1 mb-2 text-xs flex-wrap shrink-0">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1 self-center">Groups</span>
+			@frChip("replace", "$1", "insert the first captured group")
+			@frChip("replace", "$2", "insert the second captured group")
+			@frChip("replace", "$3", "insert the third captured group")
 		</div>
-		<div class="flex gap-2 mb-4 text-xs flex-wrap">
-			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1">Patterns:</span>
-			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(\\d+)')">{ `\d+` }</code>
-			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(\\w+)')">{ `\w+` }</code>
-			<code class="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700/50 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/50" onclick="appendToFindReplace('search', '(.*)')">{ `.*` }</code>
+		<div class="flex gap-1 mb-2 text-xs flex-wrap shrink-0">
+			<span class="text-gray-500 dark:text-gray-400 font-medium mr-1 self-center">Patterns</span>
+			@frChip("search", `(\d+)`, "insert a group matching digits")
+			@frChip("search", `(\w+)`, "insert a group matching word characters")
+			@frChip("search", `(.*)`, "insert a group matching anything")
 		</div>
-		<p class="text-xs text-gray-500 dark:text-gray-400 mb-4">Matches against filename stem (without extension)</p>
-		if len(names) > 0 {
-			<div class="flex-1 min-h-0 flex flex-col">
-				<h4 class="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2 uppercase tracking-wide">Preview ({ fmt.Sprintf("%d", len(names)) })</h4>
-				<div class="bg-gray-100 dark:bg-gray-900 rounded border border-gray-200 dark:border-gray-700 p-2 flex-1 overflow-y-auto">
-					@NamesList(names)
-				</div>
-			</div>
-		}
+		<p class="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+			Matches the name without its extension. Files that do not match keep their current name.
+		</p>
 	</div>
+}
+
+templ frChip(field string, text string, label string) {
+	<button
+		type="button"
+		title={ label }
+		aria-label={ label }
+		class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono hover:bg-gray-200 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-blue-500"
+		data-append-field={ field }
+				data-append-text={ text }
+	>
+		{ text }
+	</button>
 }

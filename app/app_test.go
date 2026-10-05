@@ -14,6 +14,7 @@ import (
 
 	"github.com/omegaatt36/dub/internal/domain"
 	"github.com/omegaatt36/dub/internal/mock"
+	"github.com/omegaatt36/dub/internal/port"
 )
 
 func TestHandleScan_WithServiceMock(t *testing.T) {
@@ -97,11 +98,12 @@ func TestHandlePreview_WithServiceMock(t *testing.T) {
 		{OriginalName: "a.txt", NewName: "renamed.txt", OriginalPath: "/dir/a.txt", NewPath: "/dir/renamed.txt"},
 	}
 
-	renamer.EXPECT().PreviewRename(files, names).Return(expectedPreviews, nil)
+	renamer.EXPECT().PreviewRename(files, names, port.KeepExtension).Return(expectedPreviews, nil)
 
 	app := NewApp(fs, scanner, patternSvc, renamer)
 	app.state.AllFiles = files
 	app.state.MatchedFiles = files
+	app.state.SelectAllTicks(files)
 	app.state.NewNames = names
 
 	handler := app.GetHandler()

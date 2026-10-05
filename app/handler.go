@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"log/slog"
 	"net/http"
 	"path/filepath"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/a-h/templ"
 
 	"github.com/omegaatt36/dub/internal/domain"
+	"github.com/omegaatt36/dub/internal/port"
 	"github.com/omegaatt36/dub/web/template"
 )
 
@@ -22,7 +22,10 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("GET /api/page", a.handlePage)
 	mux.HandleFunc("POST /api/select-directory", a.handleSelectDirectory)
 	mux.HandleFunc("POST /api/scan", a.handleScan)
+	mux.HandleFunc("POST /api/tick", a.handleTick)
+	mux.HandleFunc("POST /api/tick-all", a.handleTickAll)
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
+	mux.HandleFunc("POST /api/extension-policy", a.handleExtensionPolicy)
 	mux.HandleFunc("POST /api/names", a.handleNames)
 	mux.HandleFunc("POST /api/names/generate", a.handleNamesGenerate)
 	mux.HandleFunc("POST /api/names/findreplace", a.handleNamesFindReplace)
@@ -32,21 +35,12 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/undo", a.handleUndo)
 	mux.HandleFunc("POST /api/names/load", a.handleNamesLoad)
 
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		slog.Info("HTTP Request", "method", r.Method, "url", r.URL.String())
-
-		// CORS headers for Wails Linux (WebKitGTK)
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, hx-current-url, hx-request, hx-target, hx-trigger")
-
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		mux.ServeHTTP(w, r)
-	})
+	// No CORS headers: the UI is served from this same origin, so htmx
+	// requests are same-origin and need none. Advertising a wildcard origin
+	// would let any page the user visits drive /api/execute and rename files.
+	// Per-request logging is omitted on purpose; handlers log the events that
+	// matter (scan, rename, undo) through a.logger.
+	return mux
 }
 
 // handlePage returns the inner page content (no HTML shell).
@@ -60,10 +54,13 @@ func (a *App) handlePage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
+	// The native dialog blocks until the user picks or cancels, so it runs
+	// without the state lock. Holding it would stall every other request.
+	path, err := a.OpenDirectoryDialog()
+
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	path, err := a.OpenDirectoryDialog()
 	if err != nil || path == "" {
 		// User cancelled the dialog or error — return current state unchanged
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -82,6 +79,7 @@ func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
 
 	a.state.AllFiles = files
 	a.state.MatchedFiles = files
+	a.state.SelectAllTicks(files)
 	a.state.Error = ""
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -115,9 +113,51 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 
 	a.state.AllFiles = files
 	a.state.MatchedFiles = files
+	a.state.SelectAllTicks(files)
 	a.state.Error = ""
 	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
 
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// handleTick toggles one file's checkbox. Changing the ticked set invalidates
+// the current names and previews because they were computed for a different
+// set of files.
+func (a *App) handleTick(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	path := r.FormValue("path")
+	if path == "" {
+		a.state.Error = "No file path provided"
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	if r.FormValue("ticked") == "true" {
+		a.state.Selected[path] = true
+	} else {
+		delete(a.state.Selected, path)
+	}
+
+	a.state.ResetForPattern()
+	a.state.Error = ""
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// handleTickAll ticks or unticks every file currently visible in the list.
+func (a *App) handleTickAll(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if r.FormValue("ticked") == "true" {
+		a.state.SelectAllTicks(a.visibleFiles())
+	} else {
+		clear(a.state.Selected)
+	}
+
+	a.state.ResetForPattern()
+	a.state.Error = ""
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -128,20 +168,27 @@ func (a *App) handlePattern(w http.ResponseWriter, r *http.Request) {
 	pattern := r.FormValue("pattern")
 	a.state.Pattern = pattern
 	a.state.ResetForPattern()
-	a.state.PatternError = ""
 
-	if pattern == "" {
-		a.state.MatchedFiles = a.state.AllFiles
+	a.applyFilter()
+	a.state.Error = ""
+
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// handleExtensionPolicy toggles whether a rename may rewrite a file's
+// extension. Changing it invalidates the current previews because it changes
+// what every proposed name resolves to.
+func (a *App) handleExtensionPolicy(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if r.FormValue("convert") == "true" {
+		a.state.ExtensionPolicy = port.UseProposedExtension
 	} else {
-		matched, err := a.pattern.MatchFiles(a.state.AllFiles, pattern)
-		if err != nil {
-			a.state.PatternError = err.Error()
-			a.state.MatchedFiles = a.state.AllFiles
-		} else {
-			a.state.MatchedFiles = matched
-		}
+		a.state.ExtensionPolicy = port.KeepExtension
 	}
 
+	a.state.ResetForPattern()
 	a.state.Error = ""
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
@@ -158,7 +205,7 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 
 	if action == "update" {
 		// Collect names from form and return full content so Actions updates
-		files := a.displayFiles()
+		files := a.activeFiles()
 		names := make([]string, len(files))
 		for i := range files {
 			names[i] = r.FormValue(fmt.Sprintf("name_%d", i))
@@ -170,7 +217,15 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Method toggle only — just swap the editor panel
-	renderTempl(w, r, template.NamesEditor(a.displayFiles(), a.state.NewNames, a.state.NamingMethod, a.state.Template, a.state.SearchPattern, a.state.ReplacePattern))
+	renderTempl(w, r, template.NamesEditor(template.EditorData{
+		Files:          a.activeFiles(),
+		Names:          a.state.NewNames,
+		Method:         a.state.NamingMethod,
+		Template:       a.state.Template,
+		Search:         a.state.SearchPattern,
+		Replace:        a.state.ReplacePattern,
+		AllowExtChange: a.state.ExtensionPolicy == port.UseProposedExtension,
+	}))
 }
 
 func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
@@ -183,7 +238,7 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	a.state.Template = tmpl
 
-	files := a.displayFiles()
+	files := a.activeFiles()
 	names := make([]string, len(files))
 	for i, f := range files {
 		names[i] = domain.ExpandTemplate(tmpl, f, i)
@@ -206,7 +261,7 @@ func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
 	a.state.ReplacePattern = replace
 	a.state.NamingMethod = "findreplace"
 
-	files := a.displayFiles()
+	files := a.activeFiles()
 	names, err := domain.FindReplace(files, search, replace)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Invalid search pattern: %v", err)
@@ -304,8 +359,8 @@ func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	files := a.displayFiles()
-	previews, err := a.renamer.PreviewRename(files, a.state.NewNames)
+	files := a.activeFiles()
+	previews, err := a.renamer.PreviewRename(files, a.state.NewNames, a.state.ExtensionPolicy)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Preview failed: %v", err)
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -340,14 +395,9 @@ func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
 	a.logger.Info("rename executed", "renamed_count", result.RenamedCount, "error_count", len(result.Errors))
 	a.state.ResetForExecute()
 
-	// Re-scan the directory to refresh file list
-	if a.state.SelectedDirectory != "" {
-		files, err := a.scanner.Scan(a.state.SelectedDirectory)
-		if err == nil {
-			a.state.AllFiles = files
-			a.state.MatchedFiles = files
-		}
-	}
+	// Re-scan the directory to refresh the file list. The filter survives the
+	// execute, so it has to be re-applied to the refreshed files.
+	a.refreshFiles()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
 }
@@ -379,27 +429,64 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 
 	a.logger.Info("undo executed", "restored_count", result.RenamedCount, "error_count", len(result.Errors))
 
-	// Re-scan directory
-	if a.state.SelectedDirectory != "" {
-		files, err := a.scanner.Scan(a.state.SelectedDirectory)
-		if err == nil {
-			a.state.AllFiles = files
-			a.state.MatchedFiles = files
-		}
-	}
+	a.refreshFiles()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
 }
 
+// applyFilter recomputes MatchedFiles from the current Pattern.
+// An invalid pattern is not fatal: the view falls back to the full list and
+// reports the reason through PatternError.
+// Callers must hold a.mu.
+func (a *App) applyFilter() {
+	if a.state.Pattern == "" {
+		a.state.MatchedFiles = a.state.AllFiles
+		return
+	}
+
+	matched, err := a.pattern.MatchFiles(a.state.AllFiles, a.state.Pattern)
+	if err != nil {
+		a.state.PatternError = err.Error()
+		a.state.MatchedFiles = a.state.AllFiles
+		return
+	}
+
+	a.state.PatternError = ""
+	a.state.MatchedFiles = matched
+}
+
+// refreshFiles re-scans the selected directory and re-applies the filter so the
+// user keeps looking at the same subset after files were renamed or restored.
+// A failed scan leaves the previous list in place.
+// Callers must hold a.mu.
+func (a *App) refreshFiles() {
+	if a.state.SelectedDirectory == "" {
+		return
+	}
+
+	files, err := a.scanner.Scan(a.state.SelectedDirectory)
+	if err != nil {
+		a.logger.Warn("rescan failed", "path", a.state.SelectedDirectory, "error", err)
+		return
+	}
+
+	a.state.AllFiles = files
+	// Renaming changes paths, so every tick held before the rename is now
+	// dangling. Re-ticking the refreshed list keeps "rename everything" the
+	// default without letting stale paths accumulate.
+	a.state.SelectAllTicks(files)
+	a.applyFilter()
+}
+
 // autoPreview generates previews automatically when names are available.
 func (a *App) autoPreview() {
-	files := a.displayFiles()
+	files := a.activeFiles()
 	if len(a.state.NewNames) == 0 || len(files) == 0 {
 		a.state.Previews = nil
 		return
 	}
 
-	previews, err := a.renamer.PreviewRename(files, a.state.NewNames)
+	previews, err := a.renamer.PreviewRename(files, a.state.NewNames, a.state.ExtensionPolicy)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Preview failed: %v", err)
 		a.state.Previews = nil
@@ -409,33 +496,78 @@ func (a *App) autoPreview() {
 	a.state.Previews = previews
 }
 
-func (a *App) buildPageData(result any) template.PageData {
-	data := template.PageData{
+func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
+	visible := a.visibleFiles()
+	active := a.activeFiles()
+	return template.PageData{
 		SelectedDirectory: a.state.SelectedDirectory,
+		VisibleFiles:      visible,
+		ActiveFiles:       active,
+		SelectedPaths:     a.state.Selected,
 		AllFiles:          a.state.AllFiles,
 		MatchedFiles:      a.state.MatchedFiles,
+		TickedCount:       a.state.TickCount(visible),
+		ConflictCount:     countConflicts(a.state.Previews),
 		Pattern:           a.state.Pattern,
 		PatternError:      a.state.PatternError,
 		NewNames:          a.state.NewNames,
 		Previews:          a.state.Previews,
+		AllowExtChange:    a.state.ExtensionPolicy == port.UseProposedExtension,
+		ExtChangeCount:    countExtensionChanges(a.state.Previews),
 		Error:             a.state.Error,
 		NamingMethod:      a.state.NamingMethod,
 		Template:          a.state.Template,
 		SearchPattern:     a.state.SearchPattern,
 		ReplacePattern:    a.state.ReplacePattern,
 		CanUndo:           a.state.CanUndo,
+		Result:            result,
 	}
-	if r, ok := result.(*domain.RenameResult); ok {
-		data.Result = r
-	}
-	return data
 }
 
-func (a *App) displayFiles() []domain.FileItem {
+// visibleFiles is what the file list renders: the pattern-filtered subset when a
+// pattern is active, otherwise every scanned file. Ticking does not affect it,
+// so unticked files stay visible (and re-tickable) instead of vanishing.
+func (a *App) visibleFiles() []domain.FileItem {
 	if a.state.Pattern != "" {
 		return a.state.MatchedFiles
 	}
 	return a.state.AllFiles
+}
+
+// activeFiles is the set a rename actually applies to: visible AND ticked.
+// Every naming method and the execute path read this, never visibleFiles, so a
+// rename can never touch a file the user did not choose.
+func (a *App) activeFiles() []domain.FileItem {
+	visible := a.visibleFiles()
+	active := make([]domain.FileItem, 0, len(visible))
+	for _, f := range visible {
+		if a.state.Selected[f.Path] {
+			active = append(active, f)
+		}
+	}
+	return active
+}
+
+// countExtensionChanges reports how many previews rewrite the extension, so the
+// UI can warn about the real blast radius rather than the policy alone.
+func countExtensionChanges(previews []domain.RenamePreview) int {
+	n := 0
+	for _, p := range previews {
+		if filepath.Ext(p.OriginalName) != filepath.Ext(p.NewName) {
+			n++
+		}
+	}
+	return n
+}
+
+func countConflicts(previews []domain.RenamePreview) int {
+	n := 0
+	for _, p := range previews {
+		if p.Conflict {
+			n++
+		}
+	}
+	return n
 }
 
 func renderTempl(w http.ResponseWriter, r *http.Request, component templ.Component) {

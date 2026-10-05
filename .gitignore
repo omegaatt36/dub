@@ -1,7 +1,6 @@
 build/bin/
+build/wailsjs/
 test
-
-frontend/dist/
 
 
 tailwindcss

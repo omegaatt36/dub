@@ -36,9 +36,6 @@ jobs:
       - name: Install Wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
-      - name: Install templ
-        run: go install github.com/a-h/templ/cmd/templ@v0.3.977
-
       - name: Install Task
         uses: go-task/setup-task@v1
 
@@ -59,10 +56,11 @@ jobs:
             mv "tailwindcss-linux-${TAILWIND_ARCH}" tailwindcss
           fi
 
-      - name: Generate and prepare frontend
+      - name: Generate frontend assets
         run: |
           task generate
-          task frontend-prep
+          task css
+          task htmx
 
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'linux')

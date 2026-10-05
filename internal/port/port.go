@@ -16,6 +16,16 @@ type FileSystem interface {
 	ReadFile(path string) ([]byte, error)
 }
 
+// ExtensionPolicy decides whether a rename may change a file's extension.
+type ExtensionPolicy int
+
+const (
+	// KeepExtension preserves the original extension. Safe default.
+	KeepExtension ExtensionPolicy = iota
+	// UseProposedExtension lets a template set the extension explicitly.
+	UseProposedExtension
+)
+
 // PatternMatcher abstracts pattern matching for testability.
 type PatternMatcher interface {
 	ExpandShortcuts(pattern string) string
@@ -34,6 +44,6 @@ type PatternFilter interface {
 
 // Renamer handles rename previewing and execution.
 type Renamer interface {
-	PreviewRename(files []domain.FileItem, newNames []string) ([]domain.RenamePreview, error)
+	PreviewRename(files []domain.FileItem, newNames []string, policy ExtensionPolicy) ([]domain.RenamePreview, error)
 	ExecuteRename(previews []domain.RenamePreview) domain.RenameResult
 }

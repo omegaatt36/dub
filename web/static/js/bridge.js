@@ -12,6 +12,12 @@
   // Store input state before HTMX Swap
   let savedInputState = null;
 
+  // #main-content is replaced wholesale on every action, so scroll offsets have
+  // to be carried across the swap or the file list jumps back to the top
+  // mid-edit.
+  const SCROLL_KEY = "data-dub-scroll";
+  let savedScrolls = [];
+
   // --- IME Composition Handling ---
 
   document.addEventListener("compositionstart", () => {
@@ -88,6 +94,10 @@
       return;
     }
 
+    savedScrolls = [...document.querySelectorAll("[data-dub-scroll]")].map(
+      (el) => [el.getAttribute(SCROLL_KEY), el.scrollTop],
+    );
+
     const activeEl = document.activeElement;
     if (
       activeEl &&
@@ -109,6 +119,13 @@
   });
 
   document.addEventListener("htmx:after:settle", () => {
+    for (const [key, top] of savedScrolls) {
+      const el = document.querySelector(`[${SCROLL_KEY}="${key}"]`);
+      // A shorter list can clamp the old offset, which is the correct outcome.
+      if (el) el.scrollTop = top;
+    }
+    savedScrolls = [];
+
     if (!savedInputState) return;
 
     const input = document.querySelector(`[name="${savedInputState.name}"]`);
@@ -155,22 +172,64 @@
     }
   });
 
+  // --- Chip Insertion (event delegation) ---
+  // The template / find-replace chips are data attributes rather than inline
+  // onclick handlers, so the markup stays CSP-friendly and one listener covers
+  // every chip regardless of which panel was swapped in.
+
+  document.addEventListener("click", (e) => {
+    const chip = e.target.closest?.("[data-append-to-template]");
+    if (chip) {
+      window.appendToTemplate(chip.dataset.appendToTemplate);
+      return;
+    }
+
+    const frChip = e.target.closest?.("[data-append-field]");
+    if (frChip) {
+      window.appendToFindReplace(frChip.dataset.appendField, frChip.dataset.appendText);
+    }
+  });
+
   // --- Keyboard Shortcuts ---
   document.addEventListener("keydown", (e) => {
     const isMod = e.metaKey || e.ctrlKey;
+
+    // Enter advances to the next name in the manual editor. Without this,
+    // renaming N files means N round trips through Tab.
+    if (
+      e.key === "Enter" &&
+      !e.shiftKey &&
+      !isMod &&
+      e.target.matches?.("input[data-enter-next]")
+    ) {
+      e.preventDefault();
+      const all = [...document.querySelectorAll("input[data-enter-next]")];
+      const next = all[all.indexOf(e.target) + 1];
+      if (next) {
+        next.focus();
+        next.select();
+      }
+      return;
+    }
+
+    // Arrow keys move between naming-method tabs, per the ARIA tablist pattern.
+    if (e.target.matches?.("[data-method-tab]") && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+      e.preventDefault();
+      const tabs = [...document.querySelectorAll("[data-method-tab]")];
+      const dir = e.key === "ArrowRight" ? 1 : -1;
+      tabs[(tabs.indexOf(e.target) + dir + tabs.length) % tabs.length]?.click();
+      return;
+    }
+
     if (!isMod) return;
 
     const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
 
     if (e.key === "Enter") {
       e.preventDefault();
-      const executeBtn = document.getElementById("execute-btn");
-      const previewBtn = document.querySelector('[hx-post="/api/preview"]:not([hx-vals])');
-      if (executeBtn && executeBtn.style.display !== "none") {
-        executeBtn.click();
-      } else if (previewBtn) {
-        previewBtn.click();
-      }
+      // Reveal the confirm step rather than executing straight away, so the
+      // shortcut cannot skip the guard rail the button enforces.
+      window.__dubConfirm(true);
     } else if (e.key === "z" && !isInput) {
       e.preventDefault();
       const undoBtn = document.querySelector('[hx-post="/api/undo"]');
@@ -181,6 +240,17 @@
     }
   });
 })();
+
+// Toggles the two-step confirm for the rename. Both halves are rendered by the
+// server; this only flips which one is visible, so the destructive button is
+// never the initial state.
+window.__dubConfirm = function (show) {
+  const offer = document.getElementById("execute-btn");
+  const confirm = document.getElementById("execute-confirm");
+  if (!offer || !confirm) return;
+  offer.hidden = show;
+  confirm.hidden = !show;
+};
 
 // --- Directory Selection & Helpers ---
 
@@ -230,14 +300,14 @@ window.applyPreset = function (select) {
 window.appendToTemplate = function (text) {
   const input = document.querySelector('input[name="template"]');
   if (!input) return;
-  input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
+  input.setRangeText(text, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, "end");
   input.focus();
 };
 
 window.appendToFindReplace = function (fieldName, text) {
   const input = document.querySelector(`input[name="${fieldName}"]`);
   if (!input) return;
-  input.setRangeText(text, input.selectionStart, input.selectionEnd, "end");
+  input.setRangeText(text, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, "end");
   input.focus();
 };
 
@@ -250,19 +320,24 @@ function triggerScan(path) {
 
 // --- Theme Toggle ---
 
-window.initTheme = function() {
-  const theme = localStorage.getItem("dub-theme") || "system";
+const THEME_LABELS = { system: "System", light: "Light", dark: "Dark" };
+
+function currentTheme() {
+  return localStorage.getItem("dub-theme") || "system";
+}
+
+window.initTheme = function () {
+  const theme = currentTheme();
   applyTheme(theme);
 
   window
     .matchMedia("(prefers-color-scheme: dark)")
     .addEventListener("change", () => {
-      const current = localStorage.getItem("dub-theme") || "system";
-      if (current === "system") applyTheme("system");
+      if (currentTheme() === "system") applyTheme("system");
     });
 };
 
-window.setTheme = function(mode) {
+window.setTheme = function (mode) {
   localStorage.setItem("dub-theme", mode);
   applyTheme(mode);
   updateThemeButton(mode);
@@ -280,23 +355,34 @@ function applyTheme(mode) {
   }
 }
 
-window.cycleTheme = function() {
-  const current = localStorage.getItem("dub-theme") || "system";
+window.cycleTheme = function () {
   const order = ["system", "light", "dark"];
-  const next = order[(order.indexOf(current) + 1) % order.length];
+  const next = order[(order.indexOf(currentTheme()) + 1) % order.length];
   window.setTheme(next);
 };
 
+// Reveals the icon for the active mode and hides the other two, so repeated
+// calls always converge on the same markup.
 function updateThemeButton(mode) {
   const btn = document.getElementById("theme-toggle");
   if (!btn) return;
-  const icons = { system: "\u{1F4BB}", light: "\u2600\uFE0F", dark: "\u{1F319}" };
-  const labels = { system: "System", light: "Light", dark: "Dark" };
-  btn.textContent = icons[mode] || icons.system;
-  btn.title = "Theme: " + (labels[mode] || "System");
+
+  for (const icon of btn.querySelectorAll("[data-theme-icon]")) {
+    icon.classList.toggle("hidden", icon.dataset.themeIcon !== mode);
+  }
+
+  const label = "Theme: " + (THEME_LABELS[mode] || THEME_LABELS.system);
+  btn.title = label;
+  btn.setAttribute("aria-label", label);
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   window.initTheme();
-  updateThemeButton(localStorage.getItem("dub-theme") || "system");
+  updateThemeButton(currentTheme());
+});
+
+// The header is swapped in by htmx after DOMContentLoaded, so the button only
+// exists from the first settle onwards.
+document.addEventListener("htmx:after:settle", () => {
+  updateThemeButton(currentTheme());
 });
