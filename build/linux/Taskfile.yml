@@ -1,0 +1,36 @@
+version: '3'
+
+includes:
+  common: ../Taskfile.yml
+
+tasks:
+  build:
+    summary: Builds the application for Linux
+    deps:
+      - task: common:go:mod:tidy
+      - task: common:build:frontend
+    cmds:
+      - go build {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}"
+    vars:
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if .EXTRA_TAGS}}-tags {{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l"{{else}}-tags production{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s"{{end}}'
+    env:
+      GOOS: linux
+      # Wails renders through webkit2gtk, which needs cgo.
+      CGO_ENABLED: 1
+      GOARCH: '{{.ARCH | default ARCH}}'
+
+  package:
+    summary: Packages the application as a tarball
+    deps:
+      - task: build
+    cmds:
+      - tar czf "{{.ROOT_DIR}}/{{.BUNDLE_NAME}}-linux-{{.ARCH | default ARCH}}.tar.gz" -C "{{.BIN_DIR}}" "{{.APP_NAME}}"
+    vars:
+      BUNDLE_NAME: Dub
+
+  run:
+    summary: Runs the application
+    deps:
+      - task: build
+    cmds:
+      - '"{{.BIN_DIR}}/{{.APP_NAME}}"'

@@ -34,77 +34,33 @@ jobs:
           go-version-file: go.mod
 
       - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
+        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
       - name: Install Task
         uses: go-task/setup-task@v1
-
-      - name: Install Tailwind CSS CLI
-        run: |
-          if [ "$RUNNER_OS" = "macOS" ]; then
-            curl -sLO https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-macos-arm64
-            chmod +x tailwindcss-macos-arm64
-            mv tailwindcss-macos-arm64 tailwindcss
-          else
-            if [ "$RUNNER_ARCH" = "ARM64" ]; then
-              TAILWIND_ARCH=arm64
-            else
-              TAILWIND_ARCH=x64
-            fi
-            curl -sLO "https://github.com/tailwindlabs/tailwindcss/releases/download/v4.1.18/tailwindcss-linux-${TAILWIND_ARCH}"
-            chmod +x "tailwindcss-linux-${TAILWIND_ARCH}"
-            mv "tailwindcss-linux-${TAILWIND_ARCH}" tailwindcss
-          fi
-
-      - name: Generate frontend assets
-        run: |
-          task generate
-          task css
-          task htmx
 
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'linux')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
-      - name: Build (Darwin)
-        if: startsWith(matrix.platform, 'darwin')
-        run: wails build -platform ${{ matrix.platform }}
-
-      - name: Build (Linux)
-        if: startsWith(matrix.platform, 'linux')
-        run: wails build -platform ${{ matrix.platform }} -tags webkit2_41
-
-      - name: Install create-dmg
-        if: startsWith(matrix.platform, 'darwin')
-        run: brew install create-dmg
-
-      - name: Package (macOS dmg)
+      - name: Build and package (Darwin)
         if: startsWith(matrix.platform, 'darwin')
         run: |
           ARCH="${{ matrix.platform }}"
           ARCH="${ARCH##*/}"
 
-          # Run create-dmg to build the DMG with a drag-to-applications link
-          create-dmg \
-            --volname "Dub" \
-            --window-pos 200 120 \
-            --window-size 660 400 \
-            --icon-size 100 \
-            --icon "dub.app" 180 170 \
-            --hide-extension "dub.app" \
-            --app-drop-link 480 170 \
-            "Dub-darwin-${ARCH}.dmg" \
-            "build/bin/dub.app"
+          wails3 package GOOS=darwin GOARCH="$ARCH"
+          mv bin/Dub.dmg "Dub-darwin-${ARCH}.dmg"
 
-      - name: Package (Linux)
+      - name: Build and package (Linux)
         if: startsWith(matrix.platform, 'linux')
-        working-directory: build/bin
         run: |
           ARCH="${{ matrix.platform }}"
           ARCH="${ARCH##*/}"
-          tar czf "../../Dub-linux-${ARCH}.tar.gz" dub
+
+          wails3 package GOOS=linux GOARCH="$ARCH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

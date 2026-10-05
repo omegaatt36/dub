@@ -2,6 +2,7 @@ package app
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -20,6 +21,7 @@ func (a *App) newRouter() http.Handler {
 
 	// HTMX routes — static files are served by Wails AssetServer directly
 	mux.HandleFunc("GET /api/page", a.handlePage)
+	mux.HandleFunc("GET /api/main", a.handleMain)
 	mux.HandleFunc("POST /api/select-directory", a.handleSelectDirectory)
 	mux.HandleFunc("POST /api/scan", a.handleScan)
 	mux.HandleFunc("POST /api/tick", a.handleTick)
@@ -51,6 +53,15 @@ func (a *App) handlePage(w http.ResponseWriter, r *http.Request) {
 
 	data := a.buildPageData(nil)
 	renderTempl(w, r, template.AppContent(data))
+}
+
+// handleMain returns the content pane only. A desktop drop has no request to
+// render from, so the frontend pulls the new state through here instead.
+func (a *App) handleMain(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
@@ -92,11 +103,17 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	path := r.FormValue("path")
 	if path == "" {
 		a.state.Error = "No directory path provided"
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
-		return
+	} else {
+		a.scanPath(path)
 	}
 
-	// If path is a file, use its parent directory
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// scanPath points the app at path and loads its files. A file path is narrowed
+// to its parent directory, because a desktop drop can hand over either a
+// folder or a single file. Callers hold a.mu.
+func (a *App) scanPath(path string) {
 	if info, err := a.fs.Stat(path); err == nil && !info.IsDir() {
 		path = filepath.Dir(path)
 	}
@@ -107,7 +124,6 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	files, err := a.scanner.Scan(path)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Failed to scan directory: %v", err)
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
 
@@ -116,8 +132,6 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	a.state.SelectAllTicks(files)
 	a.state.Error = ""
 	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
-
-	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 // handleTick toggles one file's checkbox. Changing the ticked set invalidates
@@ -297,20 +311,23 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var names []string
-	scanner := bufio.NewScanner(strings.NewReader(string(content)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			names = append(names, line)
-		}
-	}
-
-	a.state.NewNames = names
+	a.state.NewNames = namesFromLines(strings.NewReader(string(content)))
 	a.state.NamingMethod = "file"
 	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// namesFromLines splits a names file into one name per non-empty line.
+func namesFromLines(r io.Reader) []string {
+	var names []string
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		if line := strings.TrimSpace(scanner.Text()); line != "" {
+			names = append(names, line)
+		}
+	}
+	return names
 }
 
 // handleNamesLoad reads a names file by path (for drag & drop).
@@ -321,31 +338,25 @@ func (a *App) handleNamesLoad(w http.ResponseWriter, r *http.Request) {
 	path := r.FormValue("path")
 	if path == "" {
 		a.state.Error = "No file path provided"
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
-		return
+	} else {
+		a.loadNamesPath(path)
 	}
 
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// loadNamesPath replaces the manual name list with the non-empty lines of the
+// file at path. Callers hold a.mu.
+func (a *App) loadNamesPath(path string) {
 	content, err := a.fs.ReadFile(path)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Failed to read file: %v", err)
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
 
-	var names []string
-	scanner := bufio.NewScanner(strings.NewReader(string(content)))
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line != "" {
-			names = append(names, line)
-		}
-	}
-
-	a.state.NewNames = names
+	a.state.NewNames = namesFromLines(bytes.NewReader(content))
 	a.state.NamingMethod = "file"
 	a.autoPreview()
-
-	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {

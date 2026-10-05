@@ -116,7 +116,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"h-full flex flex-col min-h-0\"><div class=\"flex-1 min-h-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden\"><!-- Left column: file list --><div class=\"flex flex-col min-h-0 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<!-- The whole body is a drop zone: a file or folder dropped anywhere here\n\t     scans its directory. The names editor nests a narrower zone inside it,\n\t     which closest() resolves first. --><div data-file-drop-target=\"scan\" class=\"h-full flex flex-col min-h-0\"><div class=\"flex-1 min-h-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden\"><!-- Left column: file list --><div class=\"flex flex-col min-h-0 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

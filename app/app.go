@@ -1,12 +1,12 @@
 package app
 
 import (
-	"context"
+	"errors"
 	"log/slog"
 	"net/http"
+	"path/filepath"
+	"strings"
 	"sync"
-
-	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/omegaatt36/dub/internal/port"
 )
@@ -21,16 +21,32 @@ func WithLogger(logger *slog.Logger) Option {
 	}
 }
 
+// WithDirectoryPicker supplies the native directory chooser. The desktop shell
+// owns the platform dialog and injects it here, which keeps the windowing
+// runtime out of this package and lets tests bring their own picker.
+func WithDirectoryPicker(pick func() (string, error)) Option {
+	return func(a *App) {
+		a.pickDirectory = pick
+	}
+}
+
+// Drop zones the frontend marks with the data-file-drop-target attribute. The
+// value is what a drop there means; Wails reports it back with the drop.
+const (
+	DropTargetScan  = "scan"
+	DropTargetNames = "names"
+)
+
 // App is the main application struct that composes all services.
 type App struct {
-	mu      sync.Mutex
-	fs      port.FileSystem
-	scanner port.Scanner
-	pattern port.PatternFilter
-	renamer port.Renamer
-	state   *AppState
-	ctx     context.Context
-	logger  *slog.Logger
+	mu            sync.Mutex
+	fs            port.FileSystem
+	scanner       port.Scanner
+	pattern       port.PatternFilter
+	renamer       port.Renamer
+	state         *AppState
+	pickDirectory func() (string, error)
+	logger        *slog.Logger
 }
 
 // NewApp creates a new App with injected service dependencies.
@@ -49,23 +65,46 @@ func NewApp(fs port.FileSystem, scanner port.Scanner, pattern port.PatternFilter
 	return a
 }
 
-// GetHandler returns the Chi HTTP handler for the asset server.
+// GetHandler returns the HTTP handler for the HTMX API.
 func (a *App) GetHandler() http.Handler {
 	return a.newRouter()
 }
 
-// Startup is called when the Wails app starts. It stores the runtime context.
-func (a *App) Startup(ctx context.Context) {
-	a.ctx = ctx
-}
-
-// Shutdown is called when the Wails app is closing.
-func (a *App) Shutdown(_ context.Context) {
-}
-
 // OpenDirectoryDialog opens a native OS directory picker and returns the selected path.
 func (a *App) OpenDirectoryDialog() (string, error) {
-	return wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "Select Directory",
-	})
+	if a.pickDirectory == nil {
+		return "", errors.New("no directory picker configured")
+	}
+	return a.pickDirectory()
+}
+
+// DropFiles applies a desktop file drop to the app state. The zone the user
+// dropped on decides the action: a .txt or .csv on the names editor replaces
+// the manual name list, anywhere else scans the dropped path's directory.
+func (a *App) DropFiles(paths []string, dropTarget string) {
+	if len(paths) == 0 {
+		return
+	}
+	path := paths[0]
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	if dropTarget == DropTargetNames && isNamesFile(path) {
+		a.loadNamesPath(path)
+		return
+	}
+	a.scanPath(path)
+}
+
+// isNamesFile reports whether path is one of the name lists the manual editor
+// accepts. A folder dropped on that zone is not a list, so it falls through to
+// a scan like any other drop.
+func isNamesFile(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".txt", ".csv":
+		return true
+	default:
+		return false
+	}
 }

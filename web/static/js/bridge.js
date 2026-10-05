@@ -144,34 +144,6 @@
     savedInputState = null;
   });
 
-  // --- Drag & Drop (Wails native API) ---
-
-  // Smart drop: detect WHERE the file was dropped.
-  // - Over "From File" upload area + .txt/.csv → import as names
-  // - Anywhere else → scan directory (or parent dir if file)
-  document.addEventListener("DOMContentLoaded", () => {
-    const rt = window.runtime;
-    if (rt && rt.OnFileDrop) {
-      rt.OnFileDrop((x, y, paths) => {
-        if (!paths || paths.length === 0) return;
-
-        const path = paths[0];
-        const el = document.elementFromPoint(x, y);
-        const isOverUpload = el && el.closest("[data-drop-names]");
-        const isNamesFile = /\.(txt|csv)$/i.test(path);
-
-        if (isOverUpload && isNamesFile) {
-          htmx.ajax("POST", "/api/names/load", {
-            values: { path },
-            target: "#main-content",
-          });
-        } else {
-          triggerScan(path);
-        }
-      }, true);
-    }
-  });
-
   // --- Chip Insertion (event delegation) ---
   // The template / find-replace chips are data attributes rather than inline
   // onclick handlers, so the markup stays CSP-friendly and one listener covers
@@ -254,24 +226,20 @@ window.__dubConfirm = function (show) {
 
 // --- Directory Selection & Helpers ---
 
-window.selectDirectory = async function () {
-  const runtime = window.runtime;
+// The Go side owns the native folder picker, so the shortcut just posts to the
+// same endpoint the Open button uses and takes the rendered result.
+window.selectDirectory = function () {
+  htmx.ajax("POST", "/api/select-directory", {
+    target: "#main-content",
+  });
+};
 
-  // Prefer Wails 2 runtime
-  if (runtime && runtime.OpenDirectoryDialog) {
-    try {
-      const path = await runtime.OpenDirectoryDialog({
-        title: "Select Directory",
-      });
-      if (path) triggerScan(path);
-    } catch (err) {
-      console.error("Directory dialog failed:", err);
-    }
-  } else {
-    // Fallback for browser testing
-    const path = prompt("Enter directory path (Debug Mode):");
-    if (path) triggerScan(path);
-  }
+// Called by the Go side after it applies a desktop drop: no request rendered
+// the new state, so pull it.
+window.dubRefresh = function () {
+  htmx.ajax("GET", "/api/main", {
+    target: "#main-content",
+  });
 };
 
 window.appendShortcut = function (shortcut) {
@@ -310,13 +278,6 @@ window.appendToFindReplace = function (fieldName, text) {
   input.setRangeText(text, input.selectionStart ?? input.value.length, input.selectionEnd ?? input.value.length, "end");
   input.focus();
 };
-
-function triggerScan(path) {
-  htmx.ajax("POST", "/api/scan", {
-    values: { path },
-    target: "#main-content",
-  });
-}
 
 // --- Theme Toggle ---
 

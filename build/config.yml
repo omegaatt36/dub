@@ -1,0 +1,10 @@
+version: '3'
+
+info:
+  companyName: "raiven_kao"
+  productName: "Dub"
+  productIdentifier: "com.omegaatt36.dub"
+  description: "Batch File Renamer"
+  copyright: "(c) 2026, raiven_kao"
+  comments: "Batch File Renamer"
+  version: "0.1.0"
