@@ -8,7 +8,20 @@ package template
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/omegaatt36/dub/internal/domain"
+import (
+	"runtime"
+
+	"github.com/omegaatt36/dub/internal/domain"
+)
+
+// modKey is the platform's shortcut modifier as users read it. bridge.js
+// accepts either Cmd or Ctrl, so only the label differs.
+func modKey() string {
+	if runtime.GOOS == "darwin" {
+		return "⌘"
+	}
+	return "Ctrl+"
+}
 
 func ErrorBanner(message string) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
@@ -39,7 +52,7 @@ func ErrorBanner(message string) templ.Component {
 			var templ_7745c5c3_Var2 string
 			templ_7745c5c3_Var2, templ_7745c5c3_Err = templ.JoinStringErrs(message)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/components.templ`, Line: 13, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/components.templ`, Line: 26, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var2))
 			if templ_7745c5c3_Err != nil {
@@ -138,7 +151,7 @@ func FormatSize(size uint64) templ.Component {
 		var templ_7745c5c3_Var5 string
 		templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(domain.FormatFileSize(size))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/components.templ`, Line: 53, Col: 30}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/components.templ`, Line: 66, Col: 30}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 		if templ_7745c5c3_Err != nil {

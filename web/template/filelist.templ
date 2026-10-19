@@ -10,89 +10,135 @@ import (
 // FileList renders the source-of-truth table: every visible file, its proposed
 // new name, and a tick box. Unticked rows stay in place (dimmed) so the user can
 // see what they excluded and re-tick it, rather than having rows disappear.
-templ FileList(
-	files []domain.FileItem,
-	selected map[string]bool,
-	previews []domain.RenamePreview,
-	hasPattern bool,
-	tickedCount int,
-	showHidden bool,
-) {
+templ FileList(data PageData) {
 	<div
 		id="file-list"
 		class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col h-full min-h-0 overflow-hidden shadow-sm"
 	>
-		<div class="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0 flex items-center gap-3">
+		<div class="px-4 py-2.5 border-b border-gray-200 dark:border-gray-700 shrink-0 flex flex-wrap items-center gap-x-3 gap-y-1.5">
 			<h3 class="text-sm font-semibold text-gray-900 dark:text-gray-200 tracking-wide shrink-0">
-				if hasPattern {
+				if data.Pattern != "" {
 					Matched
 				} else {
 					Files
 				}
 			</h3>
-			<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">{ fmt.Sprintf("%d", len(files)) }</span>
-			if tickedCount > 0 && tickedCount < len(files) {
-				<span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">{ fmt.Sprintf("%d", tickedCount) } selected</span>
+			<span class="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400 font-medium">{ fmt.Sprintf("%d", len(data.VisibleFiles)) }</span>
+			if data.TickedCount > 0 && data.TickedCount < len(data.VisibleFiles) {
+				<span class="text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-700 dark:text-blue-300 font-medium">{ fmt.Sprintf("%d", data.TickedCount) } selected</span>
 			}
-			<div class="ml-auto flex items-center gap-1">
+			<div class="ml-auto flex flex-wrap items-center gap-x-3 gap-y-1">
+				<select
+					id="sort-order"
+					name="sort"
+					aria-label="Sort files"
+					class="text-xs bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded px-2 py-1 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors"
+					hx-post="/api/sort"
+					hx-trigger="change"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					disabled?={ data.ScannedCount == 0 }
+				>
+					@sortOption("name:asc", "Name A–Z", data.SortOrder)
+					@sortOption("name:desc", "Name Z–A", data.SortOrder)
+					@sortOption("modified:desc", "Newest first", data.SortOrder)
+					@sortOption("modified:asc", "Oldest first", data.SortOrder)
+					@sortOption("size:desc", "Largest first", data.SortOrder)
+					@sortOption("size:asc", "Smallest first", data.SortOrder)
+				</select>
 				<label class="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 cursor-pointer">
 					<input
 						id="show-hidden-files"
 						type="checkbox"
-						checked?={ showHidden }
+						checked?={ data.ShowHiddenFiles }
+						disabled?={ data.SelectedDirectory == "" }
 						hx-post="/api/hidden-files"
-						hx-vals={ fmt.Sprintf(`{"show": %q}`, fmt.Sprint(!showHidden)) }
+						hx-vals={ showHiddenVals(!data.ShowHiddenFiles) }
 						hx-target="#main-content"
 						hx-swap="innerHTML"
 						class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
 					/>
 					Show hidden files
+					if data.HiddenCount > 0 {
+						<span class="text-gray-400 dark:text-gray-500">{ fmt.Sprintf("(%d)", data.HiddenCount) }</span>
+					}
 				</label>
-				<button
-					type="button"
-					class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-					hx-post="/api/tick-all"
-					hx-vals='{"ticked": "true"}'
-					hx-target="#main-content"
-					hx-swap="innerHTML"
-					disabled={ len(files) == 0 }
-				>
-					Select all
-				</button>
-				<span class="text-gray-300 dark:text-gray-600 text-xs" aria-hidden="true">·</span>
-				<button
-					type="button"
-					class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-					hx-post="/api/tick-all"
-					hx-vals='{"ticked": "false"}'
-					hx-target="#main-content"
-					hx-swap="innerHTML"
-					disabled={ len(files) == 0 }
-				>
-					Clear
-				</button>
+				<div class="flex items-center gap-1">
+					<button
+						type="button"
+						class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+						hx-post="/api/tick-all"
+						hx-vals='{"ticked": "true"}'
+						hx-target="#main-content"
+						hx-swap="innerHTML"
+						disabled?={ len(data.VisibleFiles) == 0 }
+					>
+						Select all
+					</button>
+					<span class="text-gray-300 dark:text-gray-600 text-xs" aria-hidden="true">·</span>
+					<button
+						type="button"
+						class="text-xs px-2 py-1 rounded text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+						hx-post="/api/tick-all"
+						hx-vals='{"ticked": "false"}'
+						hx-target="#main-content"
+						hx-swap="innerHTML"
+						disabled?={ len(data.VisibleFiles) == 0 }
+					>
+						Clear
+					</button>
+				</div>
 			</div>
 		</div>
 		<div data-dub-scroll="file-list" class="flex-1 overflow-auto relative min-h-0">
-			if len(files) == 0 {
-				<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8">
-					<svg class="w-12 h-12 mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
-					if hasPattern {
-						<p class="text-sm">No files match the current pattern.</p>
-					} else {
-						<p class="text-sm">No visible files. Select a directory or adjust the filters.</p>
-					}
-				</div>
-			} else if len(previews) > 0 {
-				@previewTable(files, previews)
+			if len(data.VisibleFiles) == 0 {
+				@emptyState(data)
+			} else if len(data.Previews) > 0 {
+				@previewTable(data.Previews)
 			} else {
-				@nameTable(files, selected)
+				@nameTable(data.VisibleFiles, data.SelectedPaths)
 			}
 		</div>
 	</div>
 }
 
-templ previewTable(files []domain.FileItem, previews []domain.RenamePreview) {
+templ sortOption(value string, label string, current string) {
+	<option value={ value } selected?={ value == current }>{ label }</option>
+}
+
+func showHiddenVals(show bool) string {
+	return fmt.Sprintf(`{"show": %q}`, fmt.Sprint(show))
+}
+
+// emptyState says why the list is empty, because "empty" has four different
+// causes with four different remedies.
+templ emptyState(data PageData) {
+	<div class="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400 p-8 text-center gap-1.5">
+		<svg class="w-12 h-12 mb-2 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"></path></svg>
+		if data.SelectedDirectory == "" {
+			<p class="text-sm font-medium text-gray-700 dark:text-gray-300">Drop a folder here to begin</p>
+			<p class="text-xs">or press <kbd class="font-mono px-1 py-0.5 rounded bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700">{ modKey() }O</kbd> to choose one.</p>
+		} else if data.ScannedCount == 0 {
+			<p class="text-sm">This folder has no files.</p>
+		} else if data.TotalCount == 0 {
+			<p class="text-sm">This folder has only hidden files.</p>
+			<button
+				type="button"
+				class="mt-1 text-xs px-3 py-1.5 rounded-md bg-blue-600 hover:bg-blue-500 text-white font-medium transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+				hx-post="/api/hidden-files"
+				hx-vals={ showHiddenVals(true) }
+				hx-target="#main-content"
+				hx-swap="innerHTML"
+			>
+				{ fmt.Sprintf("Show %d hidden file%s", data.HiddenCount, plural(data.HiddenCount)) }
+			</button>
+		} else {
+			<p class="text-sm">No files match the current pattern.</p>
+		}
+	</div>
+}
+
+templ previewTable(previews []domain.RenamePreview) {
 	<table class="w-full text-sm text-left border-collapse" aria-label="Rename preview">
 		<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
 			<tr>
@@ -103,7 +149,7 @@ templ previewTable(files []domain.FileItem, previews []domain.RenamePreview) {
 			</tr>
 		</thead>
 		<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-			for i, p := range previews {
+			for _, p := range previews {
 				<tr
 					class={ "group transition-colors duration-150",
 						templ.KV("bg-red-50 dark:bg-red-900/15", p.Conflict),
@@ -111,7 +157,7 @@ templ previewTable(files []domain.FileItem, previews []domain.RenamePreview) {
 				>
 					<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300">
 						<div class="flex items-center gap-2.5">
-							@FileIcon(domain.FileTypeIcon(files[i].Extension))
+							@FileIcon(domain.FileTypeIcon(p.Extension))
 							if len(p.OriginalDiff) > 0 {
 								@DiffSegments(p.OriginalDiff)
 							} else {
@@ -140,7 +186,7 @@ templ previewTable(files []domain.FileItem, previews []domain.RenamePreview) {
 						}
 					</td>
 					<td class="px-4 py-2.5 text-right text-gray-500 dark:text-gray-400 text-xs font-mono">
-						@FormatSize(files[i].Size)
+						@FormatSize(p.Size)
 					</td>
 				</tr>
 			}

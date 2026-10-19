@@ -4,7 +4,16 @@ import "github.com/omegaatt36/dub/internal/domain"
 
 type PageData struct {
 	SelectedDirectory string
+	// ScannedCount is every file in the directory, TotalCount the ones the
+	// hidden-file rule lets through, HiddenCount the dotfiles. Together they
+	// tell an empty folder apart from one that only holds hidden files.
+	ScannedCount    int
+	TotalCount      int
+	HiddenCount     int
 	ShowHiddenFiles bool
+	// SortOrder is the active "field:direction" string, as the sort control
+	// sends it.
+	SortOrder string
 	// VisibleFiles is every file the list renders (pattern-filtered when a
 	// pattern is active). Unticked files stay visible so the user can re-tick
 	// them instead of hunting for what disappeared.
@@ -14,16 +23,14 @@ type PageData struct {
 	// can never touch a file the user did not choose.
 	ActiveFiles []domain.FileItem
 	// SelectedPaths is the ticked set, keyed by absolute path.
-	SelectedPaths  map[string]bool
-	TickedCount      int
-	ConflictCount    int
+	SelectedPaths map[string]bool
+	TickedCount   int
+	ConflictCount int
 	// AllowExtChange reports whether renames may rewrite a file's extension.
-	AllowExtChange   bool
+	AllowExtChange bool
 	// ExtChangeCount is how many previews actually change the extension, which
 	// can be fewer than the total even when the policy allows it.
-	ExtChangeCount   int
-	AllFiles         []domain.FileItem
-	MatchedFiles   []domain.FileItem
+	ExtChangeCount int
 	Pattern        string
 	PatternError   string
 	NewNames       []string
@@ -44,13 +51,13 @@ templ AppContent(data PageData) {
 		<!-- Header. Doubles as the window drag handle: the app draws its own
 		     chrome, so the region is marked draggable for Wails. -->
 		<div
-			style="--wails-draggable: drag;"
+			style="--wails-draggable: drag"
 			class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3 shrink-0"
 		>
 			<img src="/static/images/logo.svg" alt="" class="w-7 h-7 shrink-0"/>
 			<h1 class="text-base font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight shrink-0">Dub</h1>
 			@DirectorySelector(data.SelectedDirectory)
-			<div class="ml-auto shrink-0" style="--wails-draggable: no-drag;">
+			<div class="ml-auto shrink-0" style="--wails-draggable: no-drag">
 				<button
 					id="theme-toggle"
 					type="button"
@@ -81,21 +88,21 @@ templ MainContent(data PageData) {
 		<div class="flex-1 min-h-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden">
 			<!-- Left column: file list -->
 			<div class="flex flex-col min-h-0 overflow-hidden">
-				@FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount, data.ShowHiddenFiles)
+				@FileList(data)
 			</div>
 			<!-- Right column: filter + naming rules -->
 			<div class="flex flex-col gap-4 min-h-0 overflow-hidden">
-				@PatternInput(data.Pattern, len(data.AllFiles), len(data.MatchedFiles), data.PatternError, data.SelectedDirectory != "")
+				@PatternInput(data.Pattern, data.TotalCount, len(data.VisibleFiles), data.PatternError, data.SelectedDirectory != "")
 				<div class="flex-1 min-h-0 overflow-hidden">
 					@NamesEditor(EditorData{
-											Files:          data.ActiveFiles,
-											Names:          data.NewNames,
-											Method:         data.NamingMethod,
-											Template:       data.Template,
-											Search:         data.SearchPattern,
-											Replace:        data.ReplacePattern,
-											AllowExtChange: data.AllowExtChange,
-										})
+						Files:          data.ActiveFiles,
+						Names:          data.NewNames,
+						Method:         data.NamingMethod,
+						Template:       data.Template,
+						Search:         data.SearchPattern,
+						Replace:        data.ReplacePattern,
+						AllowExtChange: data.AllowExtChange,
+					})
 				</div>
 			</div>
 		</div>

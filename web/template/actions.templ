@@ -18,7 +18,7 @@ templ Actions(data PageData) {
 					hx-post="/api/undo"
 					hx-target="#main-content"
 					hx-swap="innerHTML"
-					title="Undo the last rename (⌘Z)"
+					title={ "Undo the last rename (" + modKey() + "Z)" }
 				>
 					Undo
 				</button>
@@ -58,7 +58,15 @@ templ statusSummary(data PageData) {
 	if data.SelectedDirectory == "" {
 		<span class="text-gray-500 dark:text-gray-400 italic">Select a directory to get started.</span>
 	} else if len(data.VisibleFiles) == 0 {
-		<span class="text-gray-500 dark:text-gray-400 italic">No files match the current filter.</span>
+		<span class="text-gray-500 dark:text-gray-400 italic">
+			if data.ScannedCount == 0 {
+				This folder has no files.
+			} else if data.TotalCount == 0 {
+				Only hidden files here. Show them to rename.
+			} else {
+				No files match the current filter.
+			}
+		</span>
 	} else if len(data.Previews) > 0 {
 		<span class="text-gray-600 dark:text-gray-300">
 			Ready to rename <span class="font-semibold text-gray-900 dark:text-gray-100">{ fmt.Sprintf("%d", len(data.Previews)) }</span> file{ plural(len(data.Previews)) }
@@ -83,6 +91,7 @@ templ confirmExecute(data PageData) {
 			Rename { fmt.Sprintf("%d", len(data.Previews)) } file{ plural(len(data.Previews)) }?
 		</span>
 		<button
+			id="execute-yes"
 			type="button"
 			class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-md text-sm font-semibold shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-emerald-500"
 			hx-post="/api/execute"
@@ -116,11 +125,14 @@ templ confirmExecute(data PageData) {
 	</button>
 }
 
+// resultBanner reports the outcome of a rename or undo. A success fades on its
+// own and offers Undo right where the user is looking; a failure stays until it
+// is dismissed, because it carries errors worth reading.
 templ resultBanner(data PageData) {
 	if data.Result.Success {
-		<div class="fixed bottom-16 right-4 bg-emerald-50 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="status">
+		<div data-banner data-auto-dismiss="8000" class="fixed bottom-16 right-4 bg-emerald-50 dark:bg-emerald-900 border border-emerald-200 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="status">
 			<svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-			<div>
+			<div class="flex-1">
 				<p class="text-sm font-semibold">{ data.Result.Message }</p>
 				if len(data.Result.Errors) > 0 {
 					<ul class="mt-1 list-disc list-inside text-xs opacity-90 space-y-0.5">
@@ -129,12 +141,24 @@ templ resultBanner(data PageData) {
 						}
 					</ul>
 				}
+				if data.CanUndo {
+					<button
+						type="button"
+						class="mt-1.5 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
+						hx-post="/api/undo"
+						hx-target="#main-content"
+						hx-swap="innerHTML"
+					>
+						Undo
+					</button>
+				}
 			</div>
+			@dismissButton()
 		</div>
 	} else {
-		<div class="fixed bottom-16 right-4 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="alert">
+		<div data-banner class="fixed bottom-16 right-4 bg-amber-50 dark:bg-amber-900 border border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50 flex items-start gap-2" role="alert">
 			<svg class="w-5 h-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
-			<div>
+			<div class="flex-1">
 				<p class="text-sm font-semibold">{ data.Result.Message }</p>
 				if len(data.Result.Errors) > 0 {
 					<ul class="mt-1 list-disc list-inside text-xs opacity-90 space-y-0.5">
@@ -152,8 +176,20 @@ templ resultBanner(data PageData) {
 					</ul>
 				}
 			</div>
+			@dismissButton()
 		</div>
 	}
+}
+
+templ dismissButton() {
+	<button
+		type="button"
+		class="shrink-0 font-bold opacity-70 hover:opacity-100 focus-visible:ring-2 focus-visible:ring-gray-400 rounded"
+		aria-label="Dismiss"
+		onclick="this.closest('[data-banner]').remove()"
+	>
+		&times;
+	</button>
 }
 
 func plural(n int) string {
