@@ -3,8 +3,9 @@ package domain
 import "errors"
 
 var (
-	ErrInvalidPath     = errors.New("invalid path")
-	ErrMismatchedNames = errors.New("number of new names does not match number of files")
-	ErrInvalidPattern  = errors.New("invalid pattern")
-	ErrInvalidFileName = errors.New("filename contains invalid characters")
+	ErrInvalidPath      = errors.New("invalid path")
+	ErrMismatchedNames  = errors.New("number of new names does not match number of files")
+	ErrInvalidPattern   = errors.New("invalid pattern")
+	ErrInvalidFileName  = errors.New("filename contains invalid characters")
+	ErrInvalidSortOrder = errors.New("invalid sort order")
 )

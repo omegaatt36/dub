@@ -59,6 +59,8 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 
 		dir := filepath.Dir(f.Path)
 		previews[i] = domain.RenamePreview{
+			Extension:    f.Extension,
+			Size:         f.Size,
 			OriginalName: f.Name,
 			NewName:      newName,
 			OriginalPath: f.Path,

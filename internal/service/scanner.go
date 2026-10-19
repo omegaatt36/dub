@@ -2,7 +2,6 @@ package service
 
 import (
 	"path/filepath"
-	"strings"
 
 	"github.com/omegaatt36/dub/internal/domain"
 	"github.com/omegaatt36/dub/internal/port"
@@ -36,12 +35,10 @@ func (s *ScannerService) Scan(path string) ([]domain.FileItem, error) {
 		}
 
 		name := entry.Name()
-		ext := strings.ToLower(filepath.Ext(name))
-
 		files = append(files, domain.FileItem{
 			Name:      name,
 			Path:      filepath.Join(path, name),
-			Extension: ext,
+			Extension: domain.Extension(name),
 			Size:      uint64(info.Size()),
 			ModTime:   info.ModTime(),
 		})

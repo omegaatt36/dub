@@ -2,6 +2,7 @@ package domain
 
 import (
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -113,4 +114,61 @@ func TestFileTypeIcon(t *testing.T) {
 			assert.Equal(t, tt.expected, FileTypeIcon(tt.ext))
 		})
 	}
+}
+
+func TestSortFiles(t *testing.T) {
+	t0 := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+	files := func() []FileItem {
+		return []FileItem{
+			{Name: "b", Size: 30, ModTime: t0.Add(2 * time.Hour)},
+			{Name: "a", Size: 30, ModTime: t0},
+			{Name: "c", Size: 10, ModTime: t0.Add(time.Hour)},
+		}
+	}
+	names := func(fs []FileItem) []string {
+		out := make([]string, len(fs))
+		for i, f := range fs {
+			out[i] = f.Name
+		}
+		return out
+	}
+
+	tests := []struct {
+		order    SortOrder
+		expected []string
+	}{
+		{SortOrder{SortByName, false}, []string{"a", "b", "c"}},
+		{SortOrder{SortByName, true}, []string{"c", "b", "a"}},
+		{SortOrder{SortByModified, false}, []string{"a", "c", "b"}},
+		{SortOrder{SortByModified, true}, []string{"b", "c", "a"}},
+		{SortOrder{SortBySize, false}, []string{"c", "a", "b"}},
+		// Equal sizes tie-break by natural name order even when descending.
+		{SortOrder{SortBySize, true}, []string{"a", "b", "c"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.order.String(), func(t *testing.T) {
+			fs := files()
+			SortFiles(fs, tt.order)
+			assert.Equal(t, tt.expected, names(fs))
+		})
+	}
+}
+
+func TestParseSortOrder(t *testing.T) {
+	for _, o := range []SortOrder{{SortByName, false}, {SortByModified, true}, {SortBySize, true}} {
+		got, err := ParseSortOrder(o.String())
+		assert.NoError(t, err)
+		assert.Equal(t, o, got)
+	}
+	for _, bad := range []string{"", "name", "name:up", "color:asc", "name:asc:x"} {
+		_, err := ParseSortOrder(bad)
+		assert.ErrorIs(t, err, ErrInvalidSortOrder, bad)
+	}
+}
+
+func TestFileItemIsHidden(t *testing.T) {
+	assert.True(t, FileItem{Name: ".env"}.IsHidden())
+	assert.True(t, FileItem{Name: "._photo.jpg"}.IsHidden())
+	assert.False(t, FileItem{Name: "photo.jpg"}.IsHidden())
+	assert.False(t, FileItem{Name: "file.hidden.txt"}.IsHidden())
 }
