@@ -68,9 +68,12 @@ func main() {
 	})
 
 	win := desktop.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:          "Dub",
-		Width:          1400,
-		Height:         900,
+		Title:  "Dub",
+		Width:  1400,
+		Height: 900,
+		// Below this the three panes and the naming tabs no longer fit.
+		MinWidth:       960,
+		MinHeight:      600,
 		URL:            "/",
 		EnableFileDrop: true,
 	})

@@ -20,7 +20,7 @@ templ Actions(data PageData) {
 					hx-swap="innerHTML"
 					title={ "Undo the last rename (" + modKey() + "Z)" }
 				>
-					Undo
+					{ undoLabel(data) }
 				</button>
 			}
 			if len(data.Previews) > 0 {
@@ -149,7 +149,7 @@ templ resultBanner(data PageData) {
 						hx-target="#main-content"
 						hx-swap="innerHTML"
 					>
-						Undo
+						{ undoLabel(data) }
 					</button>
 				}
 			</div>
@@ -190,6 +190,15 @@ templ dismissButton() {
 	>
 		&times;
 	</button>
+}
+
+// undoLabel says where Undo acts once the user has moved to another folder, so
+// the button is never a surprise about which files it touches.
+func undoLabel(data PageData) string {
+	if data.UndoDir == "" {
+		return "Undo"
+	}
+	return "Undo rename in “" + baseName(data.UndoDir) + "”"
 }
 
 func plural(n int) string {

@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -56,6 +57,8 @@ type App struct {
 	pickDirectory func() (string, error)
 	home          string
 	logger        *slog.Logger
+	// folderCache holds the folder tree's directory listings. See listFolders.
+	folderCache map[string]folderListing
 }
 
 // NewApp creates a new App with injected service dependencies.
@@ -104,6 +107,12 @@ func (a *App) DropFiles(paths []string, dropTarget string) {
 		return
 	}
 	a.requestScan(path)
+
+	// Dub works on one folder at a time. Saying so beats silently ignoring the
+	// rest of what the user dropped.
+	if len(paths) > 1 {
+		a.state.Error = fmt.Sprintf("%d items were dropped; opened only %s", len(paths), filepath.Base(path))
+	}
 }
 
 // isNamesFile reports whether path is one of the name lists the manual editor

@@ -37,18 +37,30 @@ type AppState struct {
 	ReplacePattern string
 	// ExtensionPolicy decides whether a rename may change a file's extension.
 	// It defaults to port.KeepExtension; the UI opts in explicitly.
-	ExtensionPolicy   port.ExtensionPolicy
+	ExtensionPolicy port.ExtensionPolicy
+	// LastRenameHistory is what Undo reverses. It outlives a directory change on
+	// purpose: its paths are absolute, so undo works from anywhere, and with the
+	// folder tree one stray click would otherwise cost the user the undo.
+	// LastRenameDir is where that rename happened, so the UI can say so.
 	LastRenameHistory []domain.RenamePreview
+	LastRenameDir     string
 	CanUndo           bool
+	// NamesTyped records that the current names came from the manual editor. The
+	// names themselves cannot say so, and only typed names are lost for good on
+	// a directory change: a template or search rule can be re-applied, a loaded
+	// file can be loaded again.
+	NamesTyped bool
+	// HideTree collapses the folder sidebar to give the file panes the width.
+	HideTree bool
 	// Expanded is the set of folder-tree nodes that are open. Navigation adds
 	// the chain down to the new directory, and the user can still collapse any
 	// of it. Like the sort order it belongs to the session, not to a directory,
 	// so ResetForDirectory leaves it alone.
 	Expanded map[string]bool
-	// ExtraRoot is the tree's second root, for a directory outside the home
-	// folder. It stays put while the user navigates inside it, so the tree
-	// never loses the path back up.
-	ExtraRoot string
+	// ExtraRoots are the tree's roots beyond the home folder, one per place the
+	// user opened outside it (a USB disk, /tmp). A root stays put while the user
+	// navigates inside it, so the tree never loses the path back up.
+	ExtraRoots []string
 	// PendingDir is a directory the user asked for while typed names were at
 	// stake. It waits here until they discard the names or keep editing.
 	PendingDir string
@@ -99,8 +111,9 @@ func (s *AppState) TickCount(files []domain.FileItem) int {
 }
 
 // ResetForDirectory clears everything tied to the previous directory.
-// Invariant: no file list, filter, names, previews, ticks or undo history from
-// the old directory may survive, because they describe files that are gone.
+// Invariant: no file list, filter, names, previews or ticks from the old
+// directory may survive, because they describe files that are gone. The undo
+// history is the exception: it is keyed by absolute path and stays valid.
 func (s *AppState) ResetForDirectory() {
 	s.AllFiles = nil
 	s.MatchedFiles = nil
@@ -111,8 +124,7 @@ func (s *AppState) ResetForDirectory() {
 	s.NewNames = nil
 	s.Previews = nil
 	s.Error = ""
-	s.CanUndo = false
-	s.LastRenameHistory = nil
+	s.NamesTyped = false
 	s.ExtensionPolicy = port.KeepExtension
 }
 
@@ -132,5 +144,6 @@ func (s *AppState) ClearPreviews() {
 func (s *AppState) ResetForExecute() {
 	s.NewNames = nil
 	s.Previews = nil
+	s.NamesTyped = false
 	clear(s.ManualNames)
 }

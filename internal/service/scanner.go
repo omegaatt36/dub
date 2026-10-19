@@ -1,6 +1,7 @@
 package service
 
 import (
+	"os"
 	"path/filepath"
 
 	"github.com/omegaatt36/dub/internal/domain"
@@ -25,7 +26,7 @@ func (s *ScannerService) Scan(path string) ([]domain.FileItem, error) {
 
 	var files []domain.FileItem
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if s.isDir(path, entry) {
 			continue
 		}
 
@@ -58,7 +59,7 @@ func (s *ScannerService) ListFolders(path string) ([]domain.FolderItem, error) {
 
 	var folders []domain.FolderItem
 	for _, entry := range entries {
-		if !entry.IsDir() {
+		if !s.isDir(path, entry) {
 			continue
 		}
 
@@ -71,4 +72,19 @@ func (s *ScannerService) ListFolders(path string) ([]domain.FolderItem, error) {
 
 	domain.SortFolders(folders)
 	return folders, nil
+}
+
+// isDir reports whether entry is a folder, looking through a symlink. Links to
+// folders are common (a Downloads folder moved to another disk, a synced
+// folder), so they belong in the folder tree rather than in the file list.
+// Browsing never recurses on its own, so a link cycle cannot loop.
+func (s *ScannerService) isDir(dir string, entry os.DirEntry) bool {
+	if entry.IsDir() {
+		return true
+	}
+	if entry.Type()&os.ModeSymlink == 0 {
+		return false
+	}
+	info, err := s.fs.Stat(filepath.Join(dir, entry.Name()))
+	return err == nil && info.IsDir()
 }

@@ -11,3 +11,5 @@ build/linux/nfpm/
 
 tailwindcss
 .task
+# Left behind by Wails builds; nothing in the repository reads it.
+frontend/

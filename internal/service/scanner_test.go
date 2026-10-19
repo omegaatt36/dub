@@ -2,6 +2,7 @@ package service
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 
+	"github.com/omegaatt36/dub/internal/adapter/fs"
 	"github.com/omegaatt36/dub/internal/mock"
 	"github.com/omegaatt36/dub/internal/testutil"
 )
@@ -135,4 +137,26 @@ func TestScannerService_ListFolders(t *testing.T) {
 		require.ErrorIs(t, err, os.ErrPermission)
 		assert.Nil(t, folders)
 	})
+}
+
+func TestScannerService_SymlinkedFolders(t *testing.T) {
+	dir := t.TempDir()
+	target := t.TempDir()
+	require.NoError(t, os.Symlink(target, filepath.Join(dir, "linked")))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "a.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.Symlink(filepath.Join(dir, "a.txt"), filepath.Join(dir, "a-link.txt")))
+	svc := NewScannerService(&fs.OSFileSystem{})
+
+	folders, err := svc.ListFolders(dir)
+	require.NoError(t, err)
+	require.Len(t, folders, 1)
+	assert.Equal(t, "linked", folders[0].Name)
+
+	files, err := svc.Scan(dir)
+	require.NoError(t, err)
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = f.Name
+	}
+	assert.ElementsMatch(t, []string{"a.txt", "a-link.txt"}, names, "a link to a file is still a file")
 }

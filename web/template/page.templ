@@ -13,6 +13,10 @@ type PageData struct {
 	// Folders is the folder tree's roots, already expanded as far as the user
 	// has opened them.
 	Folders []FolderNode
+	// HideTree collapses the folder sidebar.
+	HideTree bool
+	// UndoDir names the folder Undo would act in when it is not the one in view.
+	UndoDir string
 	// PendingDir is a directory waiting on the user's say-so because opening it
 	// would discard typed names.
 	PendingDir string
@@ -98,11 +102,13 @@ templ MainContent(data PageData) {
 	<div data-file-drop-target="scan" class="h-full flex flex-col min-h-0">
 		@DirectoryBar(data)
 		@DiscardPrompt(data.PendingDir)
-		<div class="flex-1 min-h-0 grid grid-cols-[14rem_minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden">
+		<div class="flex-1 min-h-0 grid gap-4 p-4 overflow-hidden" style={ paneColumns(data.HideTree) }>
 			<!-- Left column: folder tree -->
-			<div class="flex flex-col min-h-0 overflow-hidden">
-				@FolderTree(data.Folders)
-			</div>
+			if !data.HideTree {
+				<div class="flex flex-col min-h-0 overflow-hidden">
+					@FolderTree(data.Folders)
+				</div>
+			}
 			<!-- Middle column: file list -->
 			<div class="flex flex-col min-h-0 overflow-hidden">
 				@FileList(data)

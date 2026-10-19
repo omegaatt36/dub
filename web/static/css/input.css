@@ -94,3 +94,50 @@
     outline-offset: -3px;
     background-color: rgba(67, 133, 190, 0.05);
 }
+
+/* Folder tree. The treeitem is the whole <li>, subtree included, so the focus
+   ring goes on its own row instead of the browser's box around everything. */
+[data-tree-item]:focus-visible > div {
+    box-shadow: 0 0 0 2px var(--color-blue-500, #205ea6);
+}
+
+/* Copy-path button: the check replaces the clipboard for a moment. */
+[data-copy-path] [data-copied-icon],
+[data-copy-path][data-copied="true"] [data-copy-icon] {
+    display: none;
+}
+
+[data-copy-path][data-copied="true"] [data-copied-icon] {
+    display: block;
+}
+
+/* Busy bar. bridge.js sets data-busy on <body> once a request outlasts a blink. */
+#busy-bar {
+    position: fixed;
+    inset: 0 0 auto 0;
+    height: 2px;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    background: linear-gradient(90deg, transparent, var(--color-blue-500, #205ea6), transparent) no-repeat;
+    background-size: 40% 100%;
+    animation: busy-slide 1s linear infinite;
+}
+
+body[data-busy] {
+    cursor: progress;
+}
+
+body[data-busy] #busy-bar {
+    opacity: 1;
+}
+
+@keyframes busy-slide {
+    from {
+        background-position: -40% 0;
+    }
+    to {
+        background-position: 140% 0;
+    }
+}

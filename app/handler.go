@@ -27,6 +27,8 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/scan", a.handleScan)
 	mux.HandleFunc("POST /api/scan/cancel", a.handleScanCancel)
 	mux.HandleFunc("POST /api/tree/toggle", a.handleTreeToggle)
+	mux.HandleFunc("POST /api/tree/visibility", a.handleTreeVisibility)
+	mux.HandleFunc("POST /api/refresh", a.handleRefresh)
 	mux.HandleFunc("POST /api/tick", a.handleTick)
 	mux.HandleFunc("POST /api/tick-all", a.handleTickAll)
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
@@ -114,14 +116,13 @@ func (a *App) resolveDir(path string) string {
 }
 
 // scanPath points the app at path and loads its files, dropping everything tied
-// to the previous directory. Callers hold a.mu.
+// to the previous directory. The scan comes first: a folder that cannot be read
+// (a locked one, one that just vanished) leaves the user exactly where they
+// were, with the reason, instead of on an empty page that has lost their work.
+// Callers hold a.mu.
 func (a *App) scanPath(path string) {
 	path = a.resolveDir(path)
-
-	a.state.SelectedDirectory = path
 	a.state.PendingDir = ""
-	a.revealInTree(path)
-	a.state.ResetForDirectory()
 
 	files, err := a.scanner.Scan(path)
 	if err != nil {
@@ -129,6 +130,9 @@ func (a *App) scanPath(path string) {
 		return
 	}
 
+	a.state.SelectedDirectory = path
+	a.revealInTree(path)
+	a.state.ResetForDirectory()
 	a.setScanned(files)
 	a.state.Error = ""
 	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
@@ -263,6 +267,7 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 			names[i] = r.FormValue(fmt.Sprintf("name_%d", i))
 		}
 		a.state.NewNames = names
+		a.state.NamesTyped = true
 		a.autoPreview()
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
@@ -291,6 +296,7 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	a.state.Template = tmpl
 
 	a.state.NewNames = templateNames(a.activeFiles(), tmpl)
+	a.state.NamesTyped = false
 	a.state.NamingMethod = "template"
 	a.autoPreview()
 
@@ -317,6 +323,7 @@ func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.state.NewNames = names
+	a.state.NamesTyped = false
 	a.state.Error = ""
 	a.autoPreview()
 
@@ -345,6 +352,7 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.state.NewNames = namesFromLines(strings.NewReader(string(content)))
+	a.state.NamesTyped = false
 	a.state.NamingMethod = "file"
 	a.autoPreview()
 
@@ -388,6 +396,7 @@ func (a *App) loadNamesPath(path string) {
 	}
 
 	a.state.NewNames = namesFromLines(bytes.NewReader(content))
+	a.state.NamesTyped = false
 	a.state.NamingMethod = "file"
 	a.autoPreview()
 }
@@ -433,6 +442,7 @@ func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
 	if result.Success {
 		a.state.LastRenameHistory = make([]domain.RenamePreview, len(a.state.Previews))
 		copy(a.state.LastRenameHistory, a.state.Previews)
+		a.state.LastRenameDir = a.state.SelectedDirectory
 		a.state.CanUndo = true
 	}
 
@@ -468,14 +478,102 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result := a.renamer.ExecuteRename(reversed)
+	elsewhere := a.undoElsewhere()
 	a.state.CanUndo = false
 	a.state.LastRenameHistory = nil
+	a.state.LastRenameDir = ""
 
 	a.logger.Info("undo executed", "restored_count", result.RenamedCount, "error_count", len(result.Errors))
 
-	a.refreshFiles()
+	// The restored files live in another folder when the user has moved on, so
+	// rescanning the one in view would only discard their ticks for nothing.
+	if !elsewhere {
+		a.refreshFiles()
+	}
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
+}
+
+// undoElsewhere reports whether the rename Undo would reverse happened in a
+// folder other than the one in view.
+func (a *App) undoElsewhere() bool {
+	return a.state.CanUndo && a.state.LastRenameDir != "" && a.state.LastRenameDir != a.state.SelectedDirectory
+}
+
+// handleRefresh rescans the folder in view for changes made outside the app.
+// The user's ticks and naming work carry over; only files that are new start
+// ticked, as after any scan. The silent form is the background check the page
+// sends when the window regains focus: it answers 204, which htmx leaves
+// unswapped, unless the listing really changed, and it never raises an error
+// the user did not ask for.
+func (a *App) handleRefresh(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	silent := r.FormValue("silent") == "true"
+	dir := a.state.SelectedDirectory
+	if dir == "" {
+		a.answerRefresh(w, r, silent, false)
+		return
+	}
+
+	files, err := a.scanner.Scan(dir)
+	if err != nil {
+		if !silent {
+			a.state.Error = fmt.Sprintf("Failed to refresh directory: %v", err)
+		}
+		a.answerRefresh(w, r, silent, false)
+		return
+	}
+
+	changed := !sameListing(a.state.AllFiles, files)
+	if !silent {
+		a.folderCache = nil
+		a.state.Error = ""
+	}
+	if changed {
+		a.mergeScanned(files)
+	}
+	a.answerRefresh(w, r, silent, changed || !silent)
+}
+
+// answerRefresh renders the page, or nothing when a silent refresh found
+// nothing to show.
+func (a *App) answerRefresh(w http.ResponseWriter, r *http.Request, silent, render bool) {
+	if silent && !render {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// sameListing reports whether two scans of one folder describe identical files.
+func sameListing(a, b []domain.FileItem) bool {
+	return slices.EqualFunc(a, b, func(x, y domain.FileItem) bool {
+		return x.Path == y.Path && x.Size == y.Size && x.ModTime.Equal(y.ModTime)
+	})
+}
+
+// mergeScanned installs a rescan of the same folder. Unlike setScanned it ticks
+// only the files it has not seen before, so a refresh never undoes the user's
+// choice to leave a file out.
+func (a *App) mergeScanned(files []domain.FileItem) {
+	known := make(map[string]bool, len(a.state.AllFiles))
+	for _, f := range a.state.AllFiles {
+		known[f.Path] = true
+	}
+
+	a.changeFileSet(func() {
+		domain.SortFiles(files, a.state.Sort)
+		a.state.AllFiles = files
+		a.state.PruneTicks(files)
+		a.applyFilter()
+		for _, f := range a.state.MatchedFiles {
+			if !known[f.Path] {
+				a.state.Selected[f.Path] = true
+			}
+		}
+	})
 }
 
 // applyFilter recomputes MatchedFiles from the hidden-file rule and the current
@@ -643,7 +741,9 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 		SelectedDirectory: a.state.SelectedDirectory,
 		Crumbs:            breadcrumbs(a.state.SelectedDirectory, a.home),
 		Folders:           a.folderRoots(),
-		PendingDir:        a.state.PendingDir,
+		PendingDir:        a.pendingDir(),
+		HideTree:          a.state.HideTree,
+		UndoDir:           a.undoDir(),
 		VisibleFiles:      visible,
 		ActiveFiles:       active,
 		SelectedPaths:     a.state.Selected,

@@ -12,6 +12,20 @@
   // Store input state before HTMX Swap
   let savedInputState = null;
 
+  // Manual-name forms whose debounced save has not fired yet. Leaving the folder
+  // before it does would show the server a stale list of typed names, so the
+  // navigation flushes these first (see flushPendingSaves).
+  const pendingSaves = new Set();
+
+  // The element that held focus before a swap is replaced by the swap. Elements
+  // that carry data-focus-key are looked up again afterwards, so a keyboard
+  // user keeps their place in the folder tree instead of dropping to <body>.
+  const FOCUS_KEY = "data-focus-key";
+  let savedFocusKey = null;
+
+  // The discard prompt takes focus once per question, not on every re-render.
+  let lastPromptKey = "";
+
   // #main-content is replaced wholesale on every action, so scroll offsets have
   // to be carried across the swap or the file list jumps back to the top
   // mid-edit.
@@ -77,13 +91,67 @@
 
     const timerId = setTimeout(() => {
       if (!isComposing) {
+        pendingSaves.delete(triggerTarget);
         htmx.trigger(triggerTarget, eventName);
         timers.delete(timerKey);
       }
     }, delay);
 
     timers.set(timerKey, timerId);
+    if (triggerTarget.matches?.("form[data-auto-save]")) {
+      pendingSaves.add(triggerTarget);
+    }
   }
+
+  /**
+   * Sends any unsent manual names now and resolves once the server has them.
+   * The server decides whether a folder change would lose typed names, so it has
+   * to know about the last keystrokes before it is asked.
+   */
+  window.__dubFlushImpl = flushPendingSaves;
+  function flushPendingSaves() {
+    const sends = [];
+    for (const form of pendingSaves) {
+      pendingSaves.delete(form);
+      if (!form.isConnected) continue;
+      clearTimeout(timers.get(form));
+      timers.delete(form);
+
+      const params = new URLSearchParams(new FormData(form));
+      for (const [key, value] of Object.entries(JSON.parse(form.getAttribute("hx-vals") || "{}"))) {
+        params.set(key, value);
+      }
+      sends.push(
+        htmx.ajax("POST", `${form.getAttribute("hx-post")}?${params}`, {
+          target: "#main-content",
+          swap: "innerHTML",
+        }),
+      );
+    }
+    return Promise.all(sends);
+  }
+
+  // A click that changes folder waits for the flush, then replays itself. It
+  // cannot simply be re-dispatched: the flush swaps the page and the button
+  // that was clicked is gone by then.
+  document.addEventListener(
+    "click",
+    (e) => {
+      const nav = e.target.closest?.('[hx-post="/api/scan"]');
+      if (!nav || ![...pendingSaves].some((f) => f.isConnected)) return;
+
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      const vals = JSON.parse(nav.getAttribute("hx-vals") || "{}");
+      flushPendingSaves().then(() =>
+        htmx.ajax("POST", `/api/scan?${new URLSearchParams(vals)}`, {
+          target: "#main-content",
+          swap: "innerHTML",
+        }),
+      );
+    },
+    true,
+  );
 
   // --- Smart Swap Preservation (Restore cursor & value) ---
 
@@ -99,6 +167,7 @@
     );
 
     const activeEl = document.activeElement;
+    savedFocusKey = activeEl?.closest?.(`[${FOCUS_KEY}]`)?.getAttribute(FOCUS_KEY) ?? null;
     if (
       activeEl &&
       (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA") &&
@@ -126,6 +195,9 @@
     }
     savedScrolls = [];
 
+    restoreFocus();
+    focusDiscardPrompt();
+
     if (!savedInputState) return;
 
     const input = document.querySelector(`[name="${savedInputState.name}"]`);
@@ -144,12 +216,156 @@
     savedInputState = null;
   });
 
+  function restoreFocus() {
+    const key = savedFocusKey;
+    savedFocusKey = null;
+    if (!key) return;
+    // Only fill the gap the swap left; never take focus from somewhere else.
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    document.querySelector(`[${FOCUS_KEY}="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+  }
+
+  function focusDiscardPrompt() {
+    const prompt = document.querySelector("[data-autofocus-key]");
+    if (!prompt) {
+      lastPromptKey = "";
+      return;
+    }
+    if (prompt.dataset.autofocusKey === lastPromptKey) return;
+    lastPromptKey = prompt.dataset.autofocusKey;
+    prompt.querySelector("[data-autofocus]")?.focus();
+  }
+
+  // --- Folder tree keyboard (ARIA tree pattern) ---
+  // One item is in the tab order; arrows move between the rest. The buttons in a
+  // row serve the mouse, and the keys below press them.
+
+  const treeItems = () => [...document.querySelectorAll("[data-tree-item]")];
+  const rowButton = (item, selector) => item.querySelector(`:scope > div ${selector}`);
+
+  document.addEventListener("focusin", (e) => {
+    if (!e.target.matches?.("[data-tree-item]")) return;
+    for (const item of treeItems()) item.tabIndex = -1;
+    e.target.tabIndex = 0;
+  });
+
+  function onTreeKey(e) {
+    const item = e.target;
+    const items = treeItems();
+    const at = items.indexOf(item);
+    const expanded = item.getAttribute("aria-expanded") === "true";
+
+    switch (e.key) {
+      case "ArrowDown":
+        items[at + 1]?.focus();
+        break;
+      case "ArrowUp":
+        items[at - 1]?.focus();
+        break;
+      case "Home":
+        items[0]?.focus();
+        break;
+      case "End":
+        items[items.length - 1]?.focus();
+        break;
+      case "ArrowRight":
+        if (!expanded) rowButton(item, "[data-tree-toggle]")?.click();
+        else item.querySelector(":scope > ul > [data-tree-item]")?.focus();
+        break;
+      case "ArrowLeft":
+        if (expanded) rowButton(item, "[data-tree-toggle]")?.click();
+        else item.parentElement?.closest("[data-tree-item]")?.focus();
+        break;
+      case "Enter":
+      case " ":
+        rowButton(item, "[data-tree-open]")?.click();
+        break;
+      default:
+        return;
+    }
+    e.preventDefault();
+  }
+
+  // --- Copy path ---
+
+  async function copyText(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // The async clipboard needs a secure context; fall back to the old way.
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.append(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+  }
+
+  // --- Busy indicator ---
+  // A request that takes longer than a blink shows a thin bar and a progress
+  // cursor, so a slow disk or a big folder reads as work, not as a hang.
+
+  let inflight = 0;
+  let busyTimer = null;
+
+  document.addEventListener("htmx:before:request", () => {
+    inflight++;
+    busyTimer ??= setTimeout(() => {
+      document.body.dataset.busy = "true";
+    }, 250);
+  });
+
+  document.addEventListener("htmx:finally:request", () => {
+    inflight = Math.max(0, inflight - 1);
+    if (inflight > 0) return;
+    clearTimeout(busyTimer);
+    busyTimer = null;
+    delete document.body.dataset.busy;
+  });
+
+  // --- Refresh when the window is used again ---
+  // Files change outside the app while it sits in the background. The silent
+  // form answers 204 (no swap) when nothing changed.
+
+  let lastFocusRefresh = 0;
+  window.addEventListener("focus", () => {
+    const now = Date.now();
+    if (now - lastFocusRefresh < 2000) return;
+    lastFocusRefresh = now;
+
+    const hasFolder = document.querySelector('[hx-post="/api/refresh"]');
+    const typing = [...pendingSaves].some((f) => f.isConnected);
+    if (!hasFolder || typing || isComposing) return;
+
+    htmx.ajax("POST", "/api/refresh?silent=true", {
+      target: "#main-content",
+      swap: "innerHTML",
+    });
+  });
+
   // --- Chip Insertion (event delegation) ---
   // The template / find-replace chips are data attributes rather than inline
   // onclick handlers, so the markup stays CSP-friendly and one listener covers
   // every chip regardless of which panel was swapped in.
 
   document.addEventListener("click", (e) => {
+    const copy = e.target.closest?.("[data-copy-path]");
+    if (copy) {
+      copyText(copy.dataset.copyPath).then(() => {
+        copy.dataset.copied = "true";
+        copy.title = "Copied";
+        setTimeout(() => {
+          delete copy.dataset.copied;
+          copy.title = "Copy path";
+        }, 1500);
+      });
+      return;
+    }
+
     const chip = e.target.closest?.("[data-append-to-template]");
     if (chip) {
       window.appendToTemplate(chip.dataset.appendToTemplate);
@@ -184,6 +400,11 @@
       return;
     }
 
+    if (e.target.matches?.("[data-tree-item]") && !isMod) {
+      onTreeKey(e);
+      if (e.defaultPrevented) return;
+    }
+
     // Arrow keys move between naming-method tabs, per the ARIA tablist pattern.
     if (e.target.matches?.("[data-method-tab]") && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
       e.preventDefault();
@@ -193,8 +414,15 @@
       return;
     }
 
-    // Escape backs out of the rename confirmation, the same as its Cancel button.
+    // Escape answers the open question: "keep editing" for the discard prompt,
+    // otherwise back out of the rename confirmation like its Cancel button.
     if (e.key === "Escape") {
+      const keepEditing = document.querySelector("[data-discard-cancel]");
+      if (keepEditing) {
+        e.preventDefault();
+        keepEditing.click();
+        return;
+      }
       const confirm = document.getElementById("execute-confirm");
       if (confirm && !confirm.hidden) {
         e.preventDefault();
@@ -206,22 +434,34 @@
     if (!isMod) return;
 
     const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
+    const key = e.key.toLowerCase();
 
     if (e.key === "Enter") {
       e.preventDefault();
       // Reveal the confirm step rather than executing straight away, so the
       // shortcut cannot skip the guard rail the button enforces.
       window.__dubConfirm(true);
-    } else if (e.key === "z" && !isInput) {
+    } else if (key === "z" && !e.shiftKey && !isInput) {
+      // Inside a text field Z is the field's own undo.
       e.preventDefault();
       const undoBtn = document.querySelector('[hx-post="/api/undo"]');
       if (undoBtn) undoBtn.click();
-    } else if (e.key === "o" && !isInput) {
+    } else if (key === "o") {
+      // Safe in a text field too: it has no editing meaning there.
       e.preventDefault();
       window.selectDirectory();
+    } else if (key === "r" && !e.shiftKey) {
+      // Claim the key even with no folder open, or the webview reloads the page.
+      e.preventDefault();
+      document.querySelector('[hx-post="/api/refresh"]')?.click();
     }
   });
 })();
+
+// Exposed for the shortcut and the Open button, which live outside the IIFE.
+window.__dubFlush = function () {
+  return window.__dubFlushImpl ? window.__dubFlushImpl() : Promise.resolve();
+};
 
 // Toggles the two-step confirm for the rename. Both halves are rendered by the
 // server; this only flips which one is visible, so the destructive button is
@@ -241,9 +481,11 @@ window.__dubConfirm = function (show) {
 // The Go side owns the native folder picker, so the shortcut just posts to the
 // same endpoint the Open button uses and takes the rendered result.
 window.selectDirectory = function () {
-  htmx.ajax("POST", "/api/select-directory", {
-    target: "#main-content",
-  });
+  window.__dubFlush().then(() =>
+    htmx.ajax("POST", "/api/select-directory", {
+      target: "#main-content",
+    }),
+  );
 };
 
 // Called by the Go side after it applies a desktop drop: no request rendered

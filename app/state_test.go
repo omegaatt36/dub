@@ -29,8 +29,8 @@ func TestResetForDirectoryClearsEverything(t *testing.T) {
 	assert.Nil(t, s.NewNames)
 	assert.Nil(t, s.Previews)
 	assert.Empty(t, s.Error)
-	assert.False(t, s.CanUndo)
-	assert.Nil(t, s.LastRenameHistory)
+	assert.True(t, s.CanUndo, "undo is keyed by absolute path and survives a directory change")
+	assert.NotNil(t, s.LastRenameHistory)
 }
 
 func TestSelectAllTicksOnlyAdds(t *testing.T) {

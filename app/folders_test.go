@@ -96,11 +96,11 @@ func TestFolderTree_OutsideHomeBecomesAnExtraRootThatSticks(t *testing.T) {
 	require.NoError(t, os.Mkdir(child, 0o750))
 
 	renderPost(t, a, "/api/scan", url.Values{"path": {outside}})
-	require.Equal(t, outside, a.state.ExtraRoot)
+	require.Equal(t, []string{outside}, a.state.ExtraRoots)
 
 	body := renderPost(t, a, "/api/scan", url.Values{"path": {child}})
 
-	assert.Equal(t, outside, a.state.ExtraRoot, "navigating inside the root must not move it, or the way back up is lost")
+	assert.Equal(t, []string{outside}, a.state.ExtraRoots, "navigating inside the root must not move it, or the way back up is lost")
 	assert.Contains(t, body, ">inner<")
 	assert.Contains(t, body, ">"+filepath.Base(outside)+"<")
 }
@@ -122,11 +122,11 @@ func TestFolderTree_UnreadableFolderIsReportedInPlace(t *testing.T) {
 }
 
 func TestBreadcrumbs(t *testing.T) {
-	t.Run("under home starts at tilde", func(t *testing.T) {
+	t.Run("under home starts at Home", func(t *testing.T) {
 		got := breadcrumbs("/Users/me/dev/dub", "/Users/me")
 
 		require.Len(t, got, 3)
-		assert.Equal(t, "~", got[0].Name)
+		assert.Equal(t, "Home", got[0].Name)
 		assert.Equal(t, "/Users/me", got[0].Path)
 		assert.Equal(t, "dev", got[1].Name)
 		assert.Equal(t, "/Users/me/dev", got[1].Path)
@@ -136,7 +136,7 @@ func TestBreadcrumbs(t *testing.T) {
 	t.Run("home itself is a single crumb", func(t *testing.T) {
 		got := breadcrumbs("/Users/me", "/Users/me")
 		require.Len(t, got, 1)
-		assert.Equal(t, "~", got[0].Name)
+		assert.Equal(t, "Home", got[0].Name)
 	})
 
 	t.Run("outside home starts at root", func(t *testing.T) {
