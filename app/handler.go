@@ -548,10 +548,23 @@ func (a *App) answerRefresh(w http.ResponseWriter, r *http.Request, silent, rend
 }
 
 // sameListing reports whether two scans of one folder describe identical files.
+// Order is ignored: the held list is sorted the way the user asked, a fresh scan
+// is not, and the same files in a different order are still no change.
 func sameListing(a, b []domain.FileItem) bool {
-	return slices.EqualFunc(a, b, func(x, y domain.FileItem) bool {
-		return x.Path == y.Path && x.Size == y.Size && x.ModTime.Equal(y.ModTime)
-	})
+	if len(a) != len(b) {
+		return false
+	}
+	held := make(map[string]domain.FileItem, len(a))
+	for _, f := range a {
+		held[f.Path] = f
+	}
+	for _, f := range b {
+		old, ok := held[f.Path]
+		if !ok || old.Size != f.Size || !old.ModTime.Equal(f.ModTime) {
+			return false
+		}
+	}
+	return true
 }
 
 // mergeScanned installs a rescan of the same folder. Unlike setScanned it ticks

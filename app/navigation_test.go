@@ -238,6 +238,29 @@ func TestRefresh_SilentAnswersNothingWhenNothingChanged(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "new.txt")
 }
 
+func TestRefresh_SilentIgnoresTheSortOrder(t *testing.T) {
+	a, home := newFolderApp(t)
+	samples := filepath.Join(home, "samples")
+	require.NoError(t, os.WriteFile(filepath.Join(samples, "b.txt"), []byte("x"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(samples, "c.txt"), []byte("x"), 0o600))
+	renderPost(t, a, "/api/scan", url.Values{"path": {samples}})
+	renderPost(t, a, "/api/sort", url.Values{"sort": {"name:desc"}})
+
+	rec := httptest.NewRecorder()
+	a.GetHandler().ServeHTTP(rec, httptest.NewRequest("POST", "/api/refresh?silent=true", nil))
+
+	assert.Equal(t, http.StatusNoContent, rec.Code, "a sorted list is not a changed list")
+}
+
+func TestToolbar_ButtonsSurviveASwapWithFocus(t *testing.T) {
+	a, home := newFolderApp(t)
+	body := renderPost(t, a, "/api/scan", url.Values{"path": {filepath.Join(home, "samples")}})
+
+	for _, key := range []string{"toolbar:sidebar", "toolbar:copy", "toolbar:refresh"} {
+		assert.Contains(t, body, `data-focus-key="`+key+`"`, "the swap replaces this button, so it must be findable again")
+	}
+}
+
 func TestRefresh_SilentIgnoresAVanishedFolder(t *testing.T) {
 	a, home := newFolderApp(t)
 	gone := filepath.Join(home, "gone")
