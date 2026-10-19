@@ -2,6 +2,7 @@ package domain
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -13,7 +14,19 @@ type FileItem struct {
 	ModTime   time.Time
 }
 
+// IsHidden reports whether the file is a dotfile. Hidden-ness is a property of
+// the name alone, so it needs no filesystem attributes and behaves the same on
+// every platform Dub ships on.
+func (f FileItem) IsHidden() bool {
+	return strings.HasPrefix(f.Name, ".")
+}
+
 type RenamePreview struct {
+	// Extension and Size describe the source file. A preview carries them
+	// because previews only cover ticked files, so the UI cannot recover them
+	// by indexing the (larger) visible list.
+	Extension    string
+	Size         uint64
 	OriginalName string
 	NewName      string
 	OriginalPath string
@@ -54,6 +67,10 @@ func FormatFileSize(size uint64) string {
 
 // FileTypeIcon returns an icon string based on file extension.
 func FileTypeIcon(ext string) string {
+	ext = strings.ToLower(ext)
+	if strings.HasPrefix(ext, tarSuffix+".") {
+		return "archive"
+	}
 	switch ext {
 	case ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".svg", ".webp", ".ico":
 		return "image"

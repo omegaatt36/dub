@@ -32,6 +32,17 @@ func TestRenamerService_PreviewRename(t *testing.T) {
 		assert.Equal(t, "new2.txt", previews[1].NewName)
 	})
 
+	t.Run("previews carry the source file's size and extension", func(t *testing.T) {
+		files := []domain.FileItem{
+			{Name: "a.jpg", Path: "/dir/a.jpg", Extension: ".jpg", Size: 42},
+		}
+
+		previews, err := svc.PreviewRename(files, []string{"b"}, port.KeepExtension)
+		require.NoError(t, err)
+		assert.Equal(t, ".jpg", previews[0].Extension)
+		assert.Equal(t, uint64(42), previews[0].Size)
+	})
+
 	t.Run("preserves extension if already present", func(t *testing.T) {
 		files := []domain.FileItem{
 			{Name: "old.txt", Path: "/dir/old.txt", Extension: ".txt"},
