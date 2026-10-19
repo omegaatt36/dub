@@ -33,21 +33,37 @@ func TestResetForDirectoryClearsEverything(t *testing.T) {
 	assert.Nil(t, s.LastRenameHistory)
 }
 
-func TestResetForPatternClearsMatchDependentState(t *testing.T) {
+func TestSelectAllTicksOnlyAdds(t *testing.T) {
 	s := NewAppState()
-	s.AllFiles = []domain.FileItem{{Name: "a.txt"}}
-	s.MatchedFiles = []domain.FileItem{{Name: "a.txt"}}
-	s.PatternError = "boom"
-	s.NewNames = []string{"x"}
-	s.Previews = []domain.RenamePreview{{OriginalName: "a.txt", NewName: "b.txt"}}
+	s.Selected["/d/gone-from-view.txt"] = true
 
-	s.ResetForPattern()
+	s.SelectAllTicks([]domain.FileItem{{Path: "/d/a.txt"}, {Path: "/d/b.txt"}})
 
-	assert.Nil(t, s.MatchedFiles)
-	assert.Nil(t, s.NewNames)
-	assert.Nil(t, s.Previews)
-	assert.Empty(t, s.PatternError, "PatternError must not be left stale")
-	assert.Len(t, s.AllFiles, 1, "the scanned list must survive a pattern change")
+	assert.Equal(t, map[string]bool{"/d/gone-from-view.txt": true, "/d/a.txt": true, "/d/b.txt": true}, s.Selected,
+		"ticking what is on screen must not un-tick what is not")
+}
+
+func TestPruneTicksDropsVanishedFiles(t *testing.T) {
+	s := NewAppState()
+	s.Selected["/d/a.txt"] = true
+	s.Selected["/d/renamed-away.txt"] = true
+
+	s.PruneTicks([]domain.FileItem{{Path: "/d/a.txt"}, {Path: "/d/hidden"}})
+
+	assert.Equal(t, map[string]bool{"/d/a.txt": true}, s.Selected)
+}
+
+func TestSessionPreferencesSurviveDirectoryChange(t *testing.T) {
+	s := NewAppState()
+	s.ShowHiddenFiles = true
+	s.Sort = domain.SortOrder{Field: domain.SortBySize, Desc: true}
+	s.ManualNames["/d/a.txt"] = "x"
+
+	s.ResetForDirectory()
+
+	assert.True(t, s.ShowHiddenFiles)
+	assert.Equal(t, domain.SortOrder{Field: domain.SortBySize, Desc: true}, s.Sort)
+	assert.Empty(t, s.ManualNames, "names are keyed by paths of the old directory")
 }
 
 func TestClearPreviewsKeepsNamesAndFilter(t *testing.T) {
@@ -69,10 +85,12 @@ func TestResetForExecuteKeepsFilter(t *testing.T) {
 	s.MatchedFiles = []domain.FileItem{{Name: "a.txt"}}
 	s.Pattern = "a"
 	s.NewNames = []string{"x"}
+	s.ManualNames["/d/a.txt"] = "x"
 	s.Previews = []domain.RenamePreview{{OriginalName: "a.txt", NewName: "b.txt"}}
 
 	s.ResetForExecute()
 
+	assert.Empty(t, s.ManualNames, "a rename changes the paths the names were keyed by")
 	assert.Nil(t, s.NewNames)
 	assert.Nil(t, s.Previews)
 	assert.Equal(t, "a", s.Pattern, "filter must survive execution")

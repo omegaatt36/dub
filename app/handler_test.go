@@ -777,9 +777,10 @@ func TestUntickedFileIsNeverRenamed(t *testing.T) {
 	assert.NotContains(t, renamed, "/dir/b.txt", "the unticked file must never be renamed")
 }
 
-// TestUntickingClearsStaleNames guards the index-coupling bug: names are bound
-// to file positions, so changing the ticked set must drop them.
-func TestUntickingClearsStaleNames(t *testing.T) {
+// TestUntickingRebuildsNamesForTheNewSet guards the index-coupling bug: names are
+// bound to file positions, so a name generated for the old set must never be
+// paired with a different file. The rule is re-applied to the new set instead.
+func TestUntickingRebuildsNamesForTheNewSet(t *testing.T) {
 	app := newSelectionApp()
 	scanSelectionApp(t, app)
 
@@ -794,8 +795,13 @@ func TestUntickingClearsStaleNames(t *testing.T) {
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	app.GetHandler().ServeHTTP(httptest.NewRecorder(), req)
 
-	assert.Empty(t, app.state.NewNames, "stale names must be dropped")
-	assert.Empty(t, app.state.Previews, "stale previews must be dropped")
+	assert.Equal(t, []string{"x_1", "x_2"}, app.state.NewNames, "names are regenerated for the two ticked files")
+	require.Len(t, app.state.Previews, 2)
+	assert.Equal(t, "b.txt", app.state.Previews[0].OriginalName)
+	assert.Equal(t, "c.txt", app.state.Previews[1].OriginalName)
+	for _, p := range app.state.Previews {
+		assert.NotEqual(t, "/dir/a.txt", p.OriginalPath, "the unticked file must not be previewed")
+	}
 }
 
 // TestTickAll verifies the select-all / clear bulk controls.

@@ -9,22 +9,32 @@ import (
 type AppState struct {
 	SelectedDirectory string
 	AllFiles          []domain.FileItem
-	MatchedFiles      []domain.FileItem
+	// MatchedFiles is what the file list shows: AllFiles after the hidden-file
+	// rule and the pattern. applyFilter is its only writer, so every handler
+	// that changes either input must call it.
+	MatchedFiles []domain.FileItem
 	// Selected holds the paths the user has ticked in the file list. It is the
 	// only set that may be renamed; an empty set means "nothing is ticked",
 	// never "everything is ticked". Scanning selects every file so the common
 	// case (rename all, then tick some off) needs no extra clicks.
 	Selected        map[string]bool
 	ShowHiddenFiles bool // Session preference: include dotfiles in the list and rename set.
-	Pattern         string
-	PatternError    string
-	NewNames        []string
-	Previews        []domain.RenamePreview
-	Error           string
-	NamingMethod    string // "manual" | "file" | "template" | "findreplace"
-	Template        string
-	SearchPattern   string
-	ReplacePattern  string
+	// Sort orders AllFiles and therefore {index}. Like ShowHiddenFiles it is a
+	// session preference and survives a directory change.
+	Sort domain.SortOrder
+	// ManualNames remembers what the user typed per file, so unticking a file
+	// and ticking it again does not lose its name. NewNames is positional and
+	// cannot do that.
+	ManualNames    map[string]string
+	Pattern        string
+	PatternError   string
+	NewNames       []string
+	Previews       []domain.RenamePreview
+	Error          string
+	NamingMethod   string // "manual" | "file" | "template" | "findreplace"
+	Template       string
+	SearchPattern  string
+	ReplacePattern string
 	// ExtensionPolicy decides whether a rename may change a file's extension.
 	// It defaults to port.KeepExtension; the UI opts in explicitly.
 	ExtensionPolicy   port.ExtensionPolicy
@@ -37,23 +47,30 @@ func NewAppState() *AppState {
 		NamingMethod: "manual",
 		Template:     "name_{index}",
 		Selected:     make(map[string]bool),
+		ManualNames:  make(map[string]string),
+		Sort:         domain.SortOrder{Field: domain.SortByName},
 	}
 }
 
-// SelectAllTicks marks every file in the given list as ticked. Files that
-// vanished from disk are pruned so the set cannot grow without bound.
+// SelectAllTicks marks every file in the given list as ticked and leaves other
+// ticks alone, so ticking what is on screen never un-ticks what is not.
 func (s *AppState) SelectAllTicks(files []domain.FileItem) {
-	live := make(map[string]bool, len(files))
 	for _, f := range files {
+		s.Selected[f.Path] = true
+	}
+}
+
+// PruneTicks drops ticks for files that are no longer in the scanned list, so
+// the set cannot grow without bound across renames.
+func (s *AppState) PruneTicks(scanned []domain.FileItem) {
+	live := make(map[string]bool, len(scanned))
+	for _, f := range scanned {
 		live[f.Path] = true
 	}
 	for path := range s.Selected {
 		if !live[path] {
 			delete(s.Selected, path)
 		}
-	}
-	for _, f := range files {
-		s.Selected[f.Path] = true
 	}
 }
 
@@ -75,6 +92,7 @@ func (s *AppState) ResetForDirectory() {
 	s.AllFiles = nil
 	s.MatchedFiles = nil
 	clear(s.Selected)
+	clear(s.ManualNames)
 	s.Pattern = ""
 	s.PatternError = ""
 	s.NewNames = nil
@@ -83,19 +101,6 @@ func (s *AppState) ResetForDirectory() {
 	s.CanUndo = false
 	s.LastRenameHistory = nil
 	s.ExtensionPolicy = port.KeepExtension
-}
-
-// ResetForPattern clears the match-dependent state when the filter changes.
-// Invariant: the caller is about to recompute MatchedFiles from Pattern, and
-// any names/previews built from the previous match are no longer trustworthy.
-// Ticks are deliberately NOT cleared: narrowing a filter should not silently
-// un-tick the files the user already chose. PatternError is cleared here so it
-// is never stale; the caller sets it only if the new pattern fails to compile.
-func (s *AppState) ResetForPattern() {
-	s.MatchedFiles = nil
-	s.NewNames = nil
-	s.Previews = nil
-	s.PatternError = ""
 }
 
 // ClearPreviews drops the preview set without touching names or the filter.
@@ -107,10 +112,12 @@ func (s *AppState) ClearPreviews() {
 
 // ResetForExecute clears the one-shot rename inputs after execution.
 // Invariant: previews and names are consumed by the rename and must not be
-// resubmitted, but Pattern and MatchedFiles survive so the user can rename the
-// next batch from the same filtered view. Callers must re-apply the filter to
+// resubmitted, and the per-file names are keyed by paths the rename just
+// changed. Pattern and MatchedFiles survive so the user can rename the next
+// batch from the same filtered view; callers must re-apply the filter to
 // freshly scanned files.
 func (s *AppState) ResetForExecute() {
 	s.NewNames = nil
 	s.Previews = nil
+	clear(s.ManualNames)
 }

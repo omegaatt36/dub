@@ -40,7 +40,7 @@ func TestHiddenFilesExcludedByDefault(t *testing.T) {
 	require.GreaterOrEqual(t, start, 0)
 	input := body[start : start+strings.Index(body[start:], ">")]
 	assert.NotContains(t, input, "checked", "off must omit the boolean checked attribute")
-	assert.Len(t, a.buildPageData(nil).AllFiles, 2, "pattern counts exclude hidden files")
+	assert.Equal(t, 2, a.buildPageData(nil).TotalCount, "pattern counts exclude hidden files")
 	renderPost(t, a, "/api/names/generate", url.Values{"template": {"renamed_{index}"}})
 	require.Len(t, a.state.Previews, 2)
 	renderPost(t, a, "/api/execute", nil)
@@ -54,23 +54,30 @@ func TestHiddenFilesExcludedByDefault(t *testing.T) {
 	require.Len(t, a.visibleFiles(), 2)
 }
 
-func TestHiddenFilesToggleRespectsPatternAndInvalidatesPreview(t *testing.T) {
+func TestHiddenFilesToggleRespectsPatternAndRebuildsPreview(t *testing.T) {
 	a, _ := newHiddenFilesApp(t)
 	body := renderPost(t, a, "/api/hidden-files", url.Values{"show": {"true"}})
 	require.Len(t, a.visibleFiles(), 5)
 	assert.Contains(t, body, ".DS_Store")
+
+	// Revealed dotfiles are not ticked, so the rename set is unchanged.
 	renderPost(t, a, "/api/names/generate", url.Values{"template": {"renamed_{index}"}})
-	require.Len(t, a.state.Previews, 5)
+	require.Len(t, a.state.Previews, 2)
+
+	// Tick one dotfile in; the template is re-applied to the new set.
+	renderPost(t, a, "/api/tick", url.Values{"path": {a.state.AllFiles[0].Path}, "ticked": {"true"}})
+	require.Len(t, a.state.Previews, 3)
+
+	// Hiding drops the dotfile from the set and the previews follow.
 	renderPost(t, a, "/api/hidden-files", url.Values{"show": {"false"}})
-	require.Empty(t, a.state.Previews)
-	require.Empty(t, a.state.NewNames)
+	require.Len(t, a.state.Previews, 2)
 	require.Len(t, a.activeFiles(), 2)
-	renderPost(t, a, "/api/execute", nil)
-	assert.Equal(t, "No previews to execute", a.state.Error)
+
 	renderPost(t, a, "/api/pattern", url.Values{"pattern": {"photo"}})
 	require.Len(t, a.visibleFiles(), 1)
+	require.Len(t, a.state.Previews, 1)
 	renderPost(t, a, "/api/hidden-files", url.Values{"show": {"true"}})
-	require.Len(t, a.visibleFiles(), 2)
+	require.Len(t, a.visibleFiles(), 2, "._photo.jpg matches too once revealed")
 	renderPost(t, a, "/api/hidden-files", url.Values{"show": {"false"}})
 	renderPost(t, a, "/api/pattern", url.Values{"pattern": {"["}})
 	assert.NotEmpty(t, a.state.PatternError)
@@ -85,9 +92,12 @@ func TestHiddenFilesOnlyDirectoryCanBeRevealed(t *testing.T) {
 	body := renderPost(t, a, "/api/scan", url.Values{"path": {dir}})
 	assert.Empty(t, a.visibleFiles())
 	assert.Empty(t, a.activeFiles())
-	assert.Empty(t, a.buildPageData(nil).AllFiles)
-	assert.Contains(t, body, "No visible files")
+	assert.Zero(t, a.buildPageData(nil).TotalCount)
+	assert.Contains(t, body, "only hidden files")
 	body = renderPost(t, a, "/api/hidden-files", url.Values{"show": {"true"}})
+	require.Len(t, a.visibleFiles(), 3)
+	require.Empty(t, a.activeFiles(), "revealed dotfiles start unticked")
+	renderPost(t, a, "/api/tick-all", url.Values{"ticked": {"true"}})
 	require.Len(t, a.activeFiles(), 3)
 	start := strings.Index(body, `<input id="show-hidden-files"`)
 	require.GreaterOrEqual(t, start, 0)

@@ -85,7 +85,7 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 			var templ_7745c5c3_Var4 string
 			templ_7745c5c3_Var4, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", matchedCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 22, Col: 97}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 23, Col: 97}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var4))
 			if templ_7745c5c3_Err != nil {
@@ -98,7 +98,7 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 			var templ_7745c5c3_Var5 string
 			templ_7745c5c3_Var5, templ_7745c5c3_Err = templ.JoinStringErrs(fmt.Sprintf("%d", totalCount))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 24, Col: 42}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 25, Col: 42}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var5))
 			if templ_7745c5c3_Err != nil {
@@ -115,8 +115,8 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 		}
 		var templ_7745c5c3_Var6 = []any{"block w-full pl-10 bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded-md px-3 py-2.5 text-sm placeholder-gray-400 dark:placeholder-gray-600 focus:ring-2 focus:ring-blue-500/50 transition-all",
 			templ.KV("border-red-400 dark:border-red-500 focus:border-red-500", patternError != ""),
-			templ.KV("border-green-400 dark:border-green-500 focus:border-green-500", pattern != "" && patternError == "" && totalCount > 0),
-			templ.KV("border-gray-200 dark:border-gray-600 focus:border-blue-500", patternError == "" && (pattern == "" || totalCount == 0))}
+			templ.KV("border-green-400 dark:border-green-500 focus:border-green-500", pattern != "" && patternError == "" && matchedCount > 0),
+			templ.KV("border-gray-200 dark:border-gray-600 focus:border-blue-500", patternError == "" && (pattern == "" || matchedCount == 0))}
 		templ_7745c5c3_Err = templ.RenderCSSItems(ctx, templ_7745c5c3_Buffer, templ_7745c5c3_Var6...)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
@@ -128,7 +128,7 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 		var templ_7745c5c3_Var7 string
 		templ_7745c5c3_Var7, templ_7745c5c3_Err = templ.ResolveAttributeValue(pattern)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 40, Col: 19}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 41, Col: 19}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var7)
 		if templ_7745c5c3_Err != nil {
@@ -154,7 +154,7 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 		var templ_7745c5c3_Var9 string
 		templ_7745c5c3_Var9, templ_7745c5c3_Err = templ.ResolveAttributeValue(strconv.FormatBool(patternError != ""))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 53, Col: 57}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 54, Col: 57}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var9)
 		if templ_7745c5c3_Err != nil {
@@ -172,7 +172,7 @@ func PatternInput(pattern string, totalCount, matchedCount int, patternError str
 			var templ_7745c5c3_Var10 string
 			templ_7745c5c3_Var10, templ_7745c5c3_Err = templ.JoinStringErrs(patternError)
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 57, Col: 96}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/pattern.templ`, Line: 58, Col: 96}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var10))
 			if templ_7745c5c3_Err != nil {

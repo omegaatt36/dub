@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -28,6 +29,7 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/tick-all", a.handleTickAll)
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
 	mux.HandleFunc("POST /api/hidden-files", a.handleHiddenFiles)
+	mux.HandleFunc("POST /api/sort", a.handleSort)
 	mux.HandleFunc("POST /api/extension-policy", a.handleExtensionPolicy)
 	mux.HandleFunc("POST /api/names", a.handleNames)
 	mux.HandleFunc("POST /api/names/generate", a.handleNamesGenerate)
@@ -79,21 +81,7 @@ func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.state.SelectedDirectory = path
-	a.state.ResetForDirectory()
-
-	files, err := a.scanner.Scan(path)
-	if err != nil {
-		a.state.Error = fmt.Sprintf("Failed to scan directory: %v", err)
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
-		return
-	}
-
-	a.state.AllFiles = files
-	a.applyFilter()
-	a.state.SelectAllTicks(files)
-	a.state.Error = ""
-
+	a.scanPath(path)
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -128,16 +116,12 @@ func (a *App) scanPath(path string) {
 		return
 	}
 
-	a.state.AllFiles = files
-	a.applyFilter()
-	a.state.SelectAllTicks(files)
+	a.setScanned(files)
 	a.state.Error = ""
 	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
 }
 
-// handleTick toggles one file's checkbox. Changing the ticked set invalidates
-// the current names and previews because they were computed for a different
-// set of files.
+// handleTick toggles one file's checkbox.
 func (a *App) handleTick(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -149,14 +133,15 @@ func (a *App) handleTick(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.FormValue("ticked") == "true" {
-		a.state.Selected[path] = true
-	} else {
-		delete(a.state.Selected, path)
-	}
-
-	a.state.ResetForPattern()
+	ticked := r.FormValue("ticked") == "true"
 	a.state.Error = ""
+	a.changeFileSet(func() {
+		if ticked {
+			a.state.Selected[path] = true
+		} else {
+			delete(a.state.Selected, path)
+		}
+	})
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -165,27 +150,54 @@ func (a *App) handleTickAll(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	if r.FormValue("ticked") == "true" {
-		a.state.SelectAllTicks(a.visibleFiles())
-	} else {
-		clear(a.state.Selected)
-	}
-
-	a.state.ResetForPattern()
+	ticked := r.FormValue("ticked") == "true"
 	a.state.Error = ""
+	a.changeFileSet(func() {
+		if ticked {
+			a.state.SelectAllTicks(a.visibleFiles())
+		} else {
+			clear(a.state.Selected)
+		}
+	})
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
-// handleHiddenFiles changes visibility and invalidates names and previews built
-// for the previous file set. The preference lasts for the current session.
+// handleHiddenFiles changes whether dotfiles are listed. Files that were hidden
+// are not ticked by revealing them: a rename must only touch files the user
+// chose, and the user has not seen these yet. The preference lasts for the
+// current session.
 func (a *App) handleHiddenFiles(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	a.state.ShowHiddenFiles = r.FormValue("show") == "true"
-	a.state.ResetForPattern()
-	a.applyFilter()
+	show := r.FormValue("show") == "true"
 	a.state.Error = ""
+	a.changeFileSet(func() {
+		a.state.ShowHiddenFiles = show
+		a.applyFilter()
+	})
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// handleSort reorders the file list. Order decides {index} and the position of
+// every manual name, so it is a file-set change like any other.
+func (a *App) handleSort(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	order, err := domain.ParseSortOrder(r.FormValue("sort"))
+	if err != nil {
+		a.state.Error = err.Error()
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
+
+	a.state.Error = ""
+	a.changeFileSet(func() {
+		a.state.Sort = order
+		domain.SortFiles(a.state.AllFiles, order)
+		a.applyFilter()
+	})
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -194,18 +206,17 @@ func (a *App) handlePattern(w http.ResponseWriter, r *http.Request) {
 	defer a.mu.Unlock()
 
 	pattern := r.FormValue("pattern")
-	a.state.Pattern = pattern
-	a.state.ResetForPattern()
-
-	a.applyFilter()
 	a.state.Error = ""
-
+	a.changeFileSet(func() {
+		a.state.Pattern = pattern
+		a.applyFilter()
+	})
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
 // handleExtensionPolicy toggles whether a rename may rewrite a file's
-// extension. Changing it invalidates the current previews because it changes
-// what every proposed name resolves to.
+// extension. The names stay; only what they resolve to changes, so the previews
+// are rebuilt from them.
 func (a *App) handleExtensionPolicy(w http.ResponseWriter, r *http.Request) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -216,8 +227,8 @@ func (a *App) handleExtensionPolicy(w http.ResponseWriter, r *http.Request) {
 		a.state.ExtensionPolicy = port.KeepExtension
 	}
 
-	a.state.ResetForPattern()
 	a.state.Error = ""
+	a.autoPreview()
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -266,12 +277,7 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	}
 	a.state.Template = tmpl
 
-	files := a.activeFiles()
-	names := make([]string, len(files))
-	for i, f := range files {
-		names[i] = domain.ExpandTemplate(tmpl, f, i)
-	}
-	a.state.NewNames = names
+	a.state.NewNames = templateNames(a.activeFiles(), tmpl)
 	a.state.NamingMethod = "template"
 	a.autoPreview()
 
@@ -459,12 +465,18 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
 }
 
-// applyFilter recomputes MatchedFiles from the current Pattern.
-// An invalid pattern is not fatal: the view falls back to the full list and
-// reports the reason through PatternError.
+// applyFilter recomputes MatchedFiles from the hidden-file rule and the current
+// Pattern. It is the one place visibility is decided; everything else reads
+// MatchedFiles. An invalid pattern is not fatal: the view falls back to the
+// unfiltered list and reports the reason through PatternError.
 // Callers must hold a.mu.
 func (a *App) applyFilter() {
-	files := a.filesByVisibility(a.state.AllFiles)
+	files := a.state.AllFiles
+	if !a.state.ShowHiddenFiles {
+		files = slices.DeleteFunc(slices.Clone(files), domain.FileItem.IsHidden)
+	}
+
+	a.state.PatternError = ""
 	if a.state.Pattern == "" {
 		a.state.MatchedFiles = files
 		return
@@ -477,8 +489,89 @@ func (a *App) applyFilter() {
 		return
 	}
 
-	a.state.PatternError = ""
 	a.state.MatchedFiles = matched
+}
+
+// setScanned installs a fresh scan: it applies the session sort, recomputes the
+// visible list, and ticks what the user can see. Files hidden by the dotfile
+// rule stay unticked until the user ticks them. Callers must hold a.mu.
+func (a *App) setScanned(files []domain.FileItem) {
+	domain.SortFiles(files, a.state.Sort)
+	a.state.AllFiles = files
+	a.state.PruneTicks(files)
+	a.applyFilter()
+	a.state.SelectAllTicks(a.state.MatchedFiles)
+}
+
+// changeFileSet runs mutate, which alters which files are listed, ticked or
+// ordered, and carries the user's naming work over to the new set. A rename
+// rule the user already applied is recomputed rather than thrown away, so
+// unticking one file does not cost the user a trip back to "Apply".
+// Callers must hold a.mu.
+func (a *App) changeFileSet(mutate func()) {
+	applied := len(a.state.NewNames) > 0
+	a.rememberManualNames()
+	mutate()
+	if applied {
+		a.rebuildNames()
+	}
+}
+
+// rememberManualNames records the typed names against their files before the
+// set changes, because NewNames is positional and would otherwise misattribute
+// them as soon as one file leaves or the order moves.
+func (a *App) rememberManualNames() {
+	if a.state.NamingMethod != "manual" {
+		return
+	}
+	files := a.activeFiles()
+	if len(files) != len(a.state.NewNames) {
+		return
+	}
+	for i, f := range files {
+		a.state.ManualNames[f.Path] = a.state.NewNames[i]
+	}
+}
+
+// rebuildNames recomputes NewNames and Previews for the current active files
+// from whatever rule produced them. Names loaded from a file stay as they are:
+// they are an ordered list the user supplied, not a rule.
+// Callers must hold a.mu.
+func (a *App) rebuildNames() {
+	files := a.activeFiles()
+	if len(files) == 0 {
+		a.state.NewNames = nil
+		a.state.Previews = nil
+		return
+	}
+
+	switch a.state.NamingMethod {
+	case "template":
+		a.state.NewNames = templateNames(files, a.state.Template)
+	case "findreplace":
+		names, err := domain.FindReplace(files, a.state.SearchPattern, a.state.ReplacePattern)
+		if err != nil {
+			a.state.NewNames = nil
+			a.state.Previews = nil
+			return
+		}
+		a.state.NewNames = names
+	case "manual":
+		names := make([]string, len(files))
+		for i, f := range files {
+			names[i] = a.state.ManualNames[f.Path]
+		}
+		a.state.NewNames = names
+	}
+	a.autoPreview()
+}
+
+func templateNames(files []domain.FileItem, tmpl string) []string {
+	names := make([]string, len(files))
+	for i, f := range files {
+		names[i] = domain.ExpandTemplate(tmpl, f, i)
+	}
+	return names
 }
 
 // refreshFiles re-scans the selected directory and re-applies the filter so the
@@ -496,12 +589,10 @@ func (a *App) refreshFiles() {
 		return
 	}
 
-	a.state.AllFiles = files
 	// Renaming changes paths, so every tick held before the rename is now
-	// dangling. Re-ticking the refreshed list keeps "rename everything" the
+	// dangling. Re-ticking the visible list keeps "rename everything" the
 	// default without letting stale paths accumulate.
-	a.state.SelectAllTicks(files)
-	a.applyFilter()
+	a.setScanned(files)
 }
 
 // autoPreview generates previews automatically when names are available.
@@ -525,14 +616,26 @@ func (a *App) autoPreview() {
 func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 	visible := a.visibleFiles()
 	active := a.activeFiles()
+	hidden := 0
+	for _, f := range a.state.AllFiles {
+		if f.IsHidden() {
+			hidden++
+		}
+	}
+	total := len(a.state.AllFiles)
+	if !a.state.ShowHiddenFiles {
+		total -= hidden
+	}
 	return template.PageData{
 		SelectedDirectory: a.state.SelectedDirectory,
 		VisibleFiles:      visible,
 		ActiveFiles:       active,
 		SelectedPaths:     a.state.Selected,
-		AllFiles:          a.filesByVisibility(a.state.AllFiles),
+		ScannedCount:      len(a.state.AllFiles),
+		TotalCount:        total,
+		HiddenCount:       hidden,
 		ShowHiddenFiles:   a.state.ShowHiddenFiles,
-		MatchedFiles:      a.state.MatchedFiles,
+		SortOrder:         a.state.Sort.String(),
 		TickedCount:       a.state.TickCount(visible),
 		ConflictCount:     countConflicts(a.state.Previews),
 		Pattern:           a.state.Pattern,
@@ -551,30 +654,10 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 	}
 }
 
-// visibleFiles is what the file list renders: the pattern-filtered subset when a
-// pattern is active, otherwise every scanned file allowed by hidden-file visibility.
-// Ticking does not affect it,
-// so unticked files stay visible (and re-tickable) instead of vanishing.
+// visibleFiles is what the file list renders. Ticking does not affect it, so
+// unticked files stay visible (and re-tickable) instead of vanishing.
 func (a *App) visibleFiles() []domain.FileItem {
-	if a.state.Pattern != "" {
-		return a.filesByVisibility(a.state.MatchedFiles)
-	}
-	return a.filesByVisibility(a.state.AllFiles)
-}
-
-// filesByVisibility excludes dotfiles unless the user explicitly shows them.
-// Keep the scanned list intact so toggling never needs another filesystem scan.
-func (a *App) filesByVisibility(files []domain.FileItem) []domain.FileItem {
-	if a.state.ShowHiddenFiles {
-		return files
-	}
-	visible := make([]domain.FileItem, 0, len(files))
-	for _, f := range files {
-		if !strings.HasPrefix(f.Name, ".") {
-			visible = append(visible, f)
-		}
-	}
-	return visible
+	return a.state.MatchedFiles
 }
 
 // activeFiles is the set a rename actually applies to: visible AND ticked.
@@ -596,7 +679,7 @@ func (a *App) activeFiles() []domain.FileItem {
 func countExtensionChanges(previews []domain.RenamePreview) int {
 	n := 0
 	for _, p := range previews {
-		if filepath.Ext(p.OriginalName) != filepath.Ext(p.NewName) {
+		if !strings.EqualFold(domain.Extension(p.OriginalName), domain.Extension(p.NewName)) {
 			n++
 		}
 	}

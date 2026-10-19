@@ -11,12 +11,12 @@ import (
 // than a positional list because the panel already carries more inputs than
 // positional parameters stay readable for.
 type EditorData struct {
-	Files       []domain.FileItem
-	Names       []string
-	Method      string
-	Template    string
-	Search      string
-	Replace     string
+	Files          []domain.FileItem
+	Names          []string
+	Method         string
+	Template       string
+	Search         string
+	Replace        string
 	AllowExtChange bool
 }
 
@@ -217,38 +217,35 @@ templ TemplateEditor(d EditorData) {
 }
 
 // extensionToggle is an explicit opt-in for changing a file's extension.
-		// Changing only the extension does not convert the file contents, so the
-	// default is off and the warning is part of the control rather than a tooltip.
+// Changing only the extension does not convert the file contents, so the
+// default is off and the warning is part of the control rather than a tooltip.
 templ extensionToggle(allow bool) {
 	<label class="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 cursor-pointer group">
-	<input
-		type="checkbox"
-		checked={ allow }
-		hx-post="/api/extension-policy"
-		hx-vals={ extPolicyVals(allow) }
-		hx-target="#main-content"
-		hx-swap="innerHTML"
-		class="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer shrink-0"
-	/>
-	<span class="text-xs text-gray-600 dark:text-gray-400 leading-snug">
-		<span class="font-medium text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white">Allow changing the extension</span>
-		<br/>
-		Renaming a file does not convert its contents. A template ending in <code class="font-mono">.webp</code> would rename a <code class="font-mono">.jpg</code> file without re-encoding it.
-	</span>
+		<input
+			type="checkbox"
+			checked={ allow }
+			hx-post="/api/extension-policy"
+			hx-vals={ extPolicyVals(allow) }
+			hx-target="#main-content"
+			hx-swap="innerHTML"
+			class="w-3.5 h-3.5 mt-0.5 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer shrink-0"
+		/>
+		<span class="text-xs text-gray-600 dark:text-gray-400 leading-snug">
+			<span class="font-medium text-gray-800 dark:text-gray-200 group-hover:text-gray-900 dark:group-hover:text-white">Allow changing the extension</span>
+			<br/>
+			Renaming a file does not convert its contents. A template ending in <code class="font-mono">.webp</code> would rename a <code class="font-mono">.jpg</code> file without re-encoding it.
+		</span>
 	</label>
 }
 
 func extPolicyVals(allow bool) string {
-			next := "false"
-			if !allow {
-				next = "true"
-			}
-			return fmt.Sprintf(`{"convert": %q}`, next)
-		}
-
-func appendToFindReplaceCall(field string, text string) string {
-	return field + "\x00" + text
+	next := "false"
+	if !allow {
+		next = "true"
+	}
+	return fmt.Sprintf(`{"convert": %q}`, next)
 }
+
 templ tokenChip(token string, label string) {
 	<button
 		type="button"
@@ -340,7 +337,7 @@ templ frChip(field string, text string, label string) {
 		aria-label={ label }
 		class="bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600/50 text-gray-700 dark:text-gray-300 px-1.5 py-0.5 rounded font-mono hover:bg-gray-200 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-blue-500"
 		data-append-field={ field }
-				data-append-text={ text }
+		data-append-text={ text }
 	>
 		{ text }
 	</button>

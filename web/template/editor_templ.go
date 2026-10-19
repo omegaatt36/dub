@@ -617,7 +617,6 @@ func TemplateEditor(d EditorData) templ.Component {
 // extensionToggle is an explicit opt-in for changing a file's extension.
 // Changing only the extension does not convert the file contents, so the
 // default is off and the warning is part of the control rather than a tooltip.
-
 func extensionToggle(allow bool) templ.Component {
 	return templruntime.GeneratedTemplate(func(templ_7745c5c3_Input templruntime.GeneratedComponentInput) (templ_7745c5c3_Err error) {
 		templ_7745c5c3_W, ctx := templ_7745c5c3_Input.Writer, templ_7745c5c3_Input.Context
@@ -646,7 +645,7 @@ func extensionToggle(allow bool) templ.Component {
 		var templ_7745c5c3_Var29 string
 		templ_7745c5c3_Var29, templ_7745c5c3_Err = templ.ResolveAttributeValue(allow)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 226, Col: 17}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 226, Col: 18}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var29)
 		if templ_7745c5c3_Err != nil {
@@ -659,7 +658,7 @@ func extensionToggle(allow bool) templ.Component {
 		var templ_7745c5c3_Var30 string
 		templ_7745c5c3_Var30, templ_7745c5c3_Err = templ.ResolveAttributeValue(extPolicyVals(allow))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 228, Col: 32}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 228, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var30)
 		if templ_7745c5c3_Err != nil {
@@ -679,10 +678,6 @@ func extPolicyVals(allow bool) string {
 		next = "true"
 	}
 	return fmt.Sprintf(`{"convert": %q}`, next)
-}
-
-func appendToFindReplaceCall(field string, text string) string {
-	return field + "\x00" + text
 }
 
 func tokenChip(token string, label string) templ.Component {
@@ -713,7 +708,7 @@ func tokenChip(token string, label string) templ.Component {
 		var templ_7745c5c3_Var32 string
 		templ_7745c5c3_Var32, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 255, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 252, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var32)
 		if templ_7745c5c3_Err != nil {
@@ -726,7 +721,7 @@ func tokenChip(token string, label string) templ.Component {
 		var templ_7745c5c3_Var33 string
 		templ_7745c5c3_Var33, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 256, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 253, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var33)
 		if templ_7745c5c3_Err != nil {
@@ -739,7 +734,7 @@ func tokenChip(token string, label string) templ.Component {
 		var templ_7745c5c3_Var34 string
 		templ_7745c5c3_Var34, templ_7745c5c3_Err = templ.ResolveAttributeValue(token)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 258, Col: 33}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 255, Col: 33}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var34)
 		if templ_7745c5c3_Err != nil {
@@ -752,7 +747,7 @@ func tokenChip(token string, label string) templ.Component {
 		var templ_7745c5c3_Var35 string
 		templ_7745c5c3_Var35, templ_7745c5c3_Err = templ.JoinStringErrs(token)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 260, Col: 9}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 257, Col: 9}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var35))
 		if templ_7745c5c3_Err != nil {
@@ -808,7 +803,7 @@ func FindReplaceEditor(d EditorData) templ.Component {
 		var templ_7745c5c3_Var37 string
 		templ_7745c5c3_Var37, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Search)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 287, Col: 21}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 284, Col: 21}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var37)
 		if templ_7745c5c3_Err != nil {
@@ -821,7 +816,7 @@ func FindReplaceEditor(d EditorData) templ.Component {
 		var templ_7745c5c3_Var38 string
 		templ_7745c5c3_Var38, templ_7745c5c3_Err = templ.ResolveAttributeValue(d.Replace)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 300, Col: 22}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 297, Col: 22}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var38)
 		if templ_7745c5c3_Err != nil {
@@ -895,7 +890,7 @@ func frChip(field string, text string, label string) templ.Component {
 		var templ_7745c5c3_Var40 string
 		templ_7745c5c3_Var40, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 339, Col: 15}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 336, Col: 15}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var40)
 		if templ_7745c5c3_Err != nil {
@@ -908,7 +903,7 @@ func frChip(field string, text string, label string) templ.Component {
 		var templ_7745c5c3_Var41 string
 		templ_7745c5c3_Var41, templ_7745c5c3_Err = templ.ResolveAttributeValue(label)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 340, Col: 20}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 337, Col: 20}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var41)
 		if templ_7745c5c3_Err != nil {
@@ -921,7 +916,7 @@ func frChip(field string, text string, label string) templ.Component {
 		var templ_7745c5c3_Var42 string
 		templ_7745c5c3_Var42, templ_7745c5c3_Err = templ.ResolveAttributeValue(field)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 342, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 339, Col: 27}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var42)
 		if templ_7745c5c3_Err != nil {
@@ -934,7 +929,7 @@ func frChip(field string, text string, label string) templ.Component {
 		var templ_7745c5c3_Var43 string
 		templ_7745c5c3_Var43, templ_7745c5c3_Err = templ.ResolveAttributeValue(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 343, Col: 27}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 340, Col: 25}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ_7745c5c3_Var43)
 		if templ_7745c5c3_Err != nil {
@@ -947,7 +942,7 @@ func frChip(field string, text string, label string) templ.Component {
 		var templ_7745c5c3_Var44 string
 		templ_7745c5c3_Var44, templ_7745c5c3_Err = templ.JoinStringErrs(text)
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 345, Col: 8}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/editor.templ`, Line: 342, Col: 8}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var44))
 		if templ_7745c5c3_Err != nil {

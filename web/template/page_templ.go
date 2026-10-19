@@ -12,7 +12,16 @@ import "github.com/omegaatt36/dub/internal/domain"
 
 type PageData struct {
 	SelectedDirectory string
-	ShowHiddenFiles   bool
+	// ScannedCount is every file in the directory, TotalCount the ones the
+	// hidden-file rule lets through, HiddenCount the dotfiles. Together they
+	// tell an empty folder apart from one that only holds hidden files.
+	ScannedCount    int
+	TotalCount      int
+	HiddenCount     int
+	ShowHiddenFiles bool
+	// SortOrder is the active "field:direction" string, as the sort control
+	// sends it.
+	SortOrder string
 	// VisibleFiles is every file the list renders (pattern-filtered when a
 	// pattern is active). Unticked files stay visible so the user can re-tick
 	// them instead of hunting for what disappeared.
@@ -30,8 +39,6 @@ type PageData struct {
 	// ExtChangeCount is how many previews actually change the extension, which
 	// can be fewer than the total even when the policy allows it.
 	ExtChangeCount int
-	AllFiles       []domain.FileItem
-	MatchedFiles   []domain.FileItem
 	Pattern        string
 	PatternError   string
 	NewNames       []string
@@ -68,7 +75,7 @@ func AppContent(data PageData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"h-screen flex flex-col\"><!-- Header. Doubles as the window drag handle: the app draws its own\n\t\t     chrome, so the region is marked draggable for Wails. --><div style=\"--wails-draggable: drag;\" class=\"bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3 shrink-0\"><img src=\"/static/images/logo.svg\" alt=\"\" class=\"w-7 h-7 shrink-0\"><h1 class=\"text-base font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight shrink-0\">Dub</h1>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"h-screen flex flex-col\"><!-- Header. Doubles as the window drag handle: the app draws its own\n\t\t     chrome, so the region is marked draggable for Wails. --><div style=\"--wails-draggable: drag\" class=\"bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3 shrink-0\"><img src=\"/static/images/logo.svg\" alt=\"\" class=\"w-7 h-7 shrink-0\"><h1 class=\"text-base font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight shrink-0\">Dub</h1>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -76,7 +83,7 @@ func AppContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"ml-auto shrink-0\" style=\"--wails-draggable: no-drag;\"><button id=\"theme-toggle\" type=\"button\" class=\"text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500\" onclick=\"cycleTheme()\" title=\"Theme: System\" aria-label=\"Theme: System\"><svg data-theme-icon=\"system\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-4m-6 0h6m-6 0l-1 3h8l-1-3m5-9v11\"></path></svg> <svg data-theme-icon=\"light\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg> <svg data-theme-icon=\"dark\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button></div></div><!-- Main content --><div id=\"main-content\" class=\"flex-1 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"ml-auto shrink-0\" style=\"--wails-draggable: no-drag\"><button id=\"theme-toggle\" type=\"button\" class=\"text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500\" onclick=\"cycleTheme()\" title=\"Theme: System\" aria-label=\"Theme: System\"><svg data-theme-icon=\"system\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-4m-6 0h6m-6 0l-1 3h8l-1-3m5-9v11\"></path></svg> <svg data-theme-icon=\"light\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg> <svg data-theme-icon=\"dark\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button></div></div><!-- Main content --><div id=\"main-content\" class=\"flex-1 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -121,7 +128,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount, data.ShowHiddenFiles).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = FileList(data).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -129,7 +136,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = PatternInput(data.Pattern, len(data.AllFiles), len(data.MatchedFiles), data.PatternError, data.SelectedDirectory != "").Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = PatternInput(data.Pattern, data.TotalCount, len(data.VisibleFiles), data.PatternError, data.SelectedDirectory != "").Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

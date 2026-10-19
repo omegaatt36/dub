@@ -4,14 +4,14 @@ package template
 // the header bar. Long paths truncate at the START so the leaf folder — the
 // part that identifies the directory — always stays readable.
 templ DirectorySelector(selectedDir string) {
-	<div class="flex items-center gap-2 min-w-0 flex-1" style="--wails-draggable: no-drag;">
+	<div class="flex items-center gap-2 min-w-0 flex-1" style="--wails-draggable: no-drag">
 		<button
 			type="button"
 			class="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500"
 			hx-post="/api/select-directory"
 			hx-target="#main-content"
 			hx-swap="innerHTML"
-			title="Choose a folder to scan (⌘O)"
+			title={ "Choose a folder to scan (" + modKey() + "O)" }
 		>
 			<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
 			Open

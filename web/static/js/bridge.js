@@ -193,6 +193,16 @@
       return;
     }
 
+    // Escape backs out of the rename confirmation, the same as its Cancel button.
+    if (e.key === "Escape") {
+      const confirm = document.getElementById("execute-confirm");
+      if (confirm && !confirm.hidden) {
+        e.preventDefault();
+        window.__dubConfirm(false);
+      }
+      return;
+    }
+
     if (!isMod) return;
 
     const isInput = ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName);
@@ -215,13 +225,15 @@
 
 // Toggles the two-step confirm for the rename. Both halves are rendered by the
 // server; this only flips which one is visible, so the destructive button is
-// never the initial state.
+// never the initial state. Focus follows the visible half: the button that held
+// it has just been hidden, which would otherwise drop keyboard users on <body>.
 window.__dubConfirm = function (show) {
   const offer = document.getElementById("execute-btn");
   const confirm = document.getElementById("execute-confirm");
   if (!offer || !confirm) return;
   offer.hidden = show;
   confirm.hidden = !show;
+  (show ? document.getElementById("execute-yes") : offer)?.focus();
 };
 
 // --- Directory Selection & Helpers ---
@@ -346,4 +358,14 @@ document.addEventListener("DOMContentLoaded", () => {
 // exists from the first settle onwards.
 document.addEventListener("htmx:after:settle", () => {
   updateThemeButton(currentTheme());
+});
+
+// A success banner dismisses itself. It is armed once per element, so a later
+// settle that leaves the banner in place does not restart the countdown.
+document.addEventListener("htmx:after:settle", () => {
+  for (const el of document.querySelectorAll("[data-auto-dismiss]")) {
+    const ms = parseInt(el.dataset.autoDismiss, 10);
+    el.removeAttribute("data-auto-dismiss");
+    setTimeout(() => el.remove(), ms);
+  }
 });
