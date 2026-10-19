@@ -29,6 +29,11 @@ jobs:
       - name: Generate code
         run: task generate
 
+      # The generated *_templ.go files are committed. A stale one compiles and
+      # passes tests while rendering yesterday's template.
+      - name: Check generated code is up to date
+        run: git diff --exit-code -- web/template
+
       - name: Build
         run: go build ./...
 

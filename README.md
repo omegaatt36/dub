@@ -24,6 +24,8 @@ Or click "Cancel" on the warning, then System Settings → Privacy & Security �
 - Check the preview. Duplicate target names are flagged, and the rename stays blocked until you resolve them.
 - Press **Rename**, then **Undo** if you change your mind.
 
+Shortcuts: `⌘O` (`Ctrl+O` on Linux) opens a folder, `⌘Enter` starts the rename, `Esc` backs out of the confirmation, and `⌘Z` undoes the last batch.
+
 ## Rename Modes
 
 **Template** builds names from tokens in curly braces. The original extension is appended automatically.
@@ -31,10 +33,12 @@ Or click "Cancel" on the warning, then System Settings → Privacy & Security �
 | Token | Result | Example |
 |---|---|---|
 | `{original}` | Filename without extension | `image01` |
-| `{ext}` | Extension without the dot | `jpg` |
+| `{ext}` | Extension without the dot, as it is on disk | `jpg` |
 | `{index}` | Counter from 1 | `1`, `2` |
 | `{date}` | Modification date | `2023-10-27` |
 | `{parent}` | Containing directory name | `Photos` |
+
+Compressed tarballs such as `.tar.gz` and `.tar.xz` count as one extension, so renaming `backup.tar.gz` keeps `.tar.gz`. Any other extra dots stay part of the name: `IMG.2024.jpg` has the stem `IMG.2024`.
 
 Add a format after a colon: `{index:3}` gives `001`, and `{date:20060102}` uses Go's reference time layout. Chain pipes to transform a value: `{original|upper}`, `{original|lower}`, `{original|title}`. Unknown tokens are left as-is.
 
@@ -56,7 +60,11 @@ The filter box takes a Go regular expression, matched against the filename witho
 | `[alpha]` | `([a-zA-Z]+)` | Letters |
 | `[any]` | `(.*)` | Anything |
 
-Files sort naturally, so `file_2` comes before `file_10`.
+Files sort naturally by default, so `file_2` comes before `file_10`. The sort menu above the list also orders by modification time or size. `{index}` and manual names follow the order you see.
+
+Hidden files (names starting with a dot) are left out of the list and never renamed. **Show hidden files** lists them, but they stay unticked until you tick them yourself.
+
+Ticking files, changing the filter or the sort re-applies the template or Find & Replace you already set, so the preview stays current. Manual names stay attached to their files.
 
 ## Development
 
