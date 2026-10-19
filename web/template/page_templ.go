@@ -12,6 +12,7 @@ import "github.com/omegaatt36/dub/internal/domain"
 
 type PageData struct {
 	SelectedDirectory string
+	ShowHiddenFiles   bool
 	// VisibleFiles is every file the list renders (pattern-filtered when a
 	// pattern is active). Unticked files stay visible so the user can re-tick
 	// them instead of hunting for what disappeared.
@@ -120,7 +121,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount).Render(ctx, templ_7745c5c3_Buffer)
+		templ_7745c5c3_Err = FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount, data.ShowHiddenFiles).Render(ctx, templ_7745c5c3_Buffer)
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}

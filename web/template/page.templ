@@ -4,6 +4,7 @@ import "github.com/omegaatt36/dub/internal/domain"
 
 type PageData struct {
 	SelectedDirectory string
+	ShowHiddenFiles bool
 	// VisibleFiles is every file the list renders (pattern-filtered when a
 	// pattern is active). Unticked files stay visible so the user can re-tick
 	// them instead of hunting for what disappeared.
@@ -80,7 +81,7 @@ templ MainContent(data PageData) {
 		<div class="flex-1 min-h-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden">
 			<!-- Left column: file list -->
 			<div class="flex flex-col min-h-0 overflow-hidden">
-				@FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount)
+				@FileList(data.VisibleFiles, data.SelectedPaths, data.Previews, data.Pattern != "", data.TickedCount, data.ShowHiddenFiles)
 			</div>
 			<!-- Right column: filter + naming rules -->
 			<div class="flex flex-col gap-4 min-h-0 overflow-hidden">
