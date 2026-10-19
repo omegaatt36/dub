@@ -18,7 +18,8 @@ jobs:
             platform: darwin/amd64
           - os: macos-latest
             platform: darwin/arm64
-          - os: ubuntu-latest
+          # Keep release binaries on the Ubuntu 24.04 library baseline.
+          - os: ubuntu-24.04
             platform: linux/amd64
           - os: ubuntu-24.04-arm
             platform: linux/arm64
@@ -33,9 +34,6 @@ jobs:
         with:
           go-version-file: go.mod
 
-      - name: Install Wails CLI
-        run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-
       - name: Install Task
         uses: go-task/setup-task@v1
 
@@ -43,7 +41,13 @@ jobs:
         if: startsWith(matrix.platform, 'linux')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+          sudo apt-get install -y pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+          pkg-config --modversion gtk4 webkitgtk-6.0
+
+      - name: Install Wails CLI
+        run: |
+          wails_version="$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
+          go install "github.com/wailsapp/wails/v3/cmd/wails3@${wails_version}"
 
       - name: Build and package (Darwin)
         if: startsWith(matrix.platform, 'darwin')
