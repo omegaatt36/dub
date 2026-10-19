@@ -8,10 +8,22 @@ package template
 import "github.com/a-h/templ"
 import templruntime "github.com/a-h/templ/runtime"
 
-import "github.com/omegaatt36/dub/internal/domain"
+import (
+	"path/filepath"
+
+	"github.com/omegaatt36/dub/internal/domain"
+)
 
 type PageData struct {
 	SelectedDirectory string
+	// Crumbs is SelectedDirectory split into clickable segments.
+	Crumbs []Crumb
+	// Folders is the folder tree's roots, already expanded as far as the user
+	// has opened them.
+	Folders []FolderNode
+	// PendingDir is a directory waiting on the user's say-so because opening it
+	// would discard typed names.
+	PendingDir string
 	// ScannedCount is every file in the directory, TotalCount the ones the
 	// hidden-file rule lets through, HiddenCount the dotfiles. Together they
 	// tell an empty folder apart from one that only holds hidden files.
@@ -75,15 +87,7 @@ func AppContent(data PageData) templ.Component {
 			templ_7745c5c3_Var1 = templ.NopComponent
 		}
 		ctx = templ.ClearChildren(ctx)
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"h-screen flex flex-col\"><!-- Header. Doubles as the window drag handle: the app draws its own\n\t\t     chrome, so the region is marked draggable for Wails. --><div style=\"--wails-draggable: drag\" class=\"bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3 shrink-0\"><img src=\"/static/images/logo.svg\" alt=\"\" class=\"w-7 h-7 shrink-0\"><h1 class=\"text-base font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight shrink-0\">Dub</h1>")
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = DirectorySelector(data.SelectedDirectory).Render(ctx, templ_7745c5c3_Buffer)
-		if templ_7745c5c3_Err != nil {
-			return templ_7745c5c3_Err
-		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "<div class=\"ml-auto shrink-0\" style=\"--wails-draggable: no-drag\"><button id=\"theme-toggle\" type=\"button\" class=\"text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500\" onclick=\"cycleTheme()\" title=\"Theme: System\" aria-label=\"Theme: System\"><svg data-theme-icon=\"system\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-4m-6 0h6m-6 0l-1 3h8l-1-3m5-9v11\"></path></svg> <svg data-theme-icon=\"light\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg> <svg data-theme-icon=\"dark\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button></div></div><!-- Main content --><div id=\"main-content\" class=\"flex-1 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 1, "<div class=\"h-screen flex flex-col\"><!-- Header. Doubles as the window drag handle: the app draws its own\n\t\t     chrome, so the region is marked draggable for Wails. --><div style=\"--wails-draggable: drag\" class=\"bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3 shrink-0\"><img src=\"/static/images/logo.svg\" alt=\"\" class=\"w-7 h-7 shrink-0\"><h1 class=\"text-base font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight shrink-0\">Dub</h1><div class=\"ml-auto shrink-0\" style=\"--wails-draggable: no-drag\"><button id=\"theme-toggle\" type=\"button\" class=\"text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500\" onclick=\"cycleTheme()\" title=\"Theme: System\" aria-label=\"Theme: System\"><svg data-theme-icon=\"system\" class=\"w-5 h-5\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-4m-6 0h6m-6 0l-1 3h8l-1-3m5-9v11\"></path></svg> <svg data-theme-icon=\"light\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z\"></path></svg> <svg data-theme-icon=\"dark\" class=\"w-5 h-5 hidden\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" viewBox=\"0 0 24 24\"><path stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z\"></path></svg></button></div></div><!-- Main content --><div id=\"main-content\" class=\"flex-1 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -91,7 +95,7 @@ func AppContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "</div></div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 2, "</div></div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -124,7 +128,27 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<!-- The whole body is a drop zone: a file or folder dropped anywhere here\n\t     scans its directory. The names editor nests a narrower zone inside it,\n\t     which closest() resolves first. --><div data-file-drop-target=\"scan\" class=\"h-full flex flex-col min-h-0\"><div class=\"flex-1 min-h-0 grid grid-cols-[minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden\"><!-- Left column: file list --><div class=\"flex flex-col min-h-0 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 3, "<!-- The whole body is a drop zone: a file or folder dropped anywhere here\n\t     scans its directory. The names editor nests a narrower zone inside it,\n\t     which closest() resolves first. --><div data-file-drop-target=\"scan\" class=\"h-full flex flex-col min-h-0\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = DirectoryBar(data).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = DiscardPrompt(data.PendingDir).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 4, "<div class=\"flex-1 min-h-0 grid grid-cols-[14rem_minmax(0,3fr)_minmax(0,2fr)] gap-4 p-4 overflow-hidden\"><!-- Left column: folder tree --><div class=\"flex flex-col min-h-0 overflow-hidden\">")
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = FolderTree(data.Folders).Render(ctx, templ_7745c5c3_Buffer)
+		if templ_7745c5c3_Err != nil {
+			return templ_7745c5c3_Err
+		}
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><!-- Middle column: file list --><div class=\"flex flex-col min-h-0 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -132,7 +156,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 5, "</div><!-- Right column: filter + naming rules --><div class=\"flex flex-col gap-4 min-h-0 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "</div><!-- Right column: filter + naming rules --><div class=\"flex flex-col gap-4 min-h-0 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -140,7 +164,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 6, "<div class=\"flex-1 min-h-0 overflow-hidden\">")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "<div class=\"flex-1 min-h-0 overflow-hidden\">")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -156,7 +180,7 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 7, "</div></div></div><!-- Action bar spans the full window so the destructive button sits in a\n\t\t     single consistent place regardless of column heights. -->")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div></div></div><!-- Action bar spans the full window so the destructive button sits in a\n\t\t     single consistent place regardless of column heights. -->")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
@@ -164,12 +188,17 @@ func MainContent(data PageData) templ.Component {
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
-		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 8, "</div>")
+		templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 9, "</div>")
 		if templ_7745c5c3_Err != nil {
 			return templ_7745c5c3_Err
 		}
 		return nil
 	})
+}
+
+// baseName is the last element of a path, for prose that names a folder.
+func baseName(path string) string {
+	return filepath.Base(path)
 }
 
 func hasConflicts(previews []domain.RenamePreview) bool {

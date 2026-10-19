@@ -30,6 +30,14 @@ func WithDirectoryPicker(pick func() (string, error)) Option {
 	}
 }
 
+// WithHomeDir sets the folder the tree is rooted at. Without it the tree only
+// shows the directory the user opened.
+func WithHomeDir(dir string) Option {
+	return func(a *App) {
+		a.home = filepath.Clean(dir)
+	}
+}
+
 // Drop zones the frontend marks with the data-file-drop-target attribute. The
 // value is what a drop there means; Wails reports it back with the drop.
 const (
@@ -46,6 +54,7 @@ type App struct {
 	renamer       port.Renamer
 	state         *AppState
 	pickDirectory func() (string, error)
+	home          string
 	logger        *slog.Logger
 }
 
@@ -94,7 +103,7 @@ func (a *App) DropFiles(paths []string, dropTarget string) {
 		a.loadNamesPath(path)
 		return
 	}
-	a.scanPath(path)
+	a.requestScan(path)
 }
 
 // isNamesFile reports whether path is one of the name lists the manual editor

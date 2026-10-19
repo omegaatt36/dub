@@ -25,6 +25,8 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("GET /api/main", a.handleMain)
 	mux.HandleFunc("POST /api/select-directory", a.handleSelectDirectory)
 	mux.HandleFunc("POST /api/scan", a.handleScan)
+	mux.HandleFunc("POST /api/scan/cancel", a.handleScanCancel)
+	mux.HandleFunc("POST /api/tree/toggle", a.handleTreeToggle)
 	mux.HandleFunc("POST /api/tick", a.handleTick)
 	mux.HandleFunc("POST /api/tick-all", a.handleTickAll)
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
@@ -81,7 +83,7 @@ func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	a.scanPath(path)
+	a.requestScan(path)
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
@@ -90,24 +92,35 @@ func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {
 	defer a.mu.Unlock()
 
 	path := r.FormValue("path")
-	if path == "" {
+	switch {
+	case path == "":
 		a.state.Error = "No directory path provided"
-	} else {
+	case r.FormValue("discard") == "true":
 		a.scanPath(path)
+	default:
+		a.requestScan(path)
 	}
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
-// scanPath points the app at path and loads its files. A file path is narrowed
-// to its parent directory, because a desktop drop can hand over either a
-// folder or a single file. Callers hold a.mu.
-func (a *App) scanPath(path string) {
+// resolveDir narrows a file path to its parent directory, because a desktop
+// drop can hand over either a folder or a single file.
+func (a *App) resolveDir(path string) string {
 	if info, err := a.fs.Stat(path); err == nil && !info.IsDir() {
-		path = filepath.Dir(path)
+		return filepath.Dir(path)
 	}
+	return path
+}
+
+// scanPath points the app at path and loads its files, dropping everything tied
+// to the previous directory. Callers hold a.mu.
+func (a *App) scanPath(path string) {
+	path = a.resolveDir(path)
 
 	a.state.SelectedDirectory = path
+	a.state.PendingDir = ""
+	a.revealInTree(path)
 	a.state.ResetForDirectory()
 
 	files, err := a.scanner.Scan(path)
@@ -628,6 +641,9 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 	}
 	return template.PageData{
 		SelectedDirectory: a.state.SelectedDirectory,
+		Crumbs:            breadcrumbs(a.state.SelectedDirectory, a.home),
+		Folders:           a.folderRoots(),
+		PendingDir:        a.state.PendingDir,
 		VisibleFiles:      visible,
 		ActiveFiles:       active,
 		SelectedPaths:     a.state.Selected,

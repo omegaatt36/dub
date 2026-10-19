@@ -32,6 +32,9 @@ func TestHandleScan_WithServiceMock(t *testing.T) {
 
 	fs.EXPECT().Stat("/test/dir").Return(nil, os.ErrNotExist)
 	scanner.EXPECT().Scan("/test/dir").Return(expectedFiles, nil)
+	// The opened directory becomes a tree root, and an open root is listed once
+	// when the page renders.
+	scanner.EXPECT().ListFolders("/test/dir").Return(nil, nil)
 
 	app := NewApp(fs, scanner, pattern, renamer)
 	handler := app.GetHandler()

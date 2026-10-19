@@ -19,10 +19,13 @@ Or click "Cancel" on the warning, then System Settings → Privacy & Security �
 
 ## Quick Start
 
-- Drag a file or folder into the window to scan its directory.
+- Pick a folder in the **Folders** sidebar, which starts at your home folder, or drag a file or folder into the window. `⌘O` (`Ctrl+O` on Linux) opens any other location.
+- The path above the lists is clickable: each parent folder takes you back up.
 - Pick a mode: **Template**, **Find & Replace**, or edit the names by hand.
 - Check the preview. Duplicate target names are flagged, and the rename stays blocked until you resolve them.
 - Press **Rename**, then **Undo** if you change your mind.
+
+Switching folders asks first if you have typed names in **Manual** mode, since those exist nowhere else. A template or Find & Replace rule needs no warning.
 
 Shortcuts: `⌘O` (`Ctrl+O` on Linux) opens a folder, `⌘Enter` starts the rename, `Esc` backs out of the confirmation, and `⌘Z` undoes the last batch.
 

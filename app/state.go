@@ -40,6 +40,18 @@ type AppState struct {
 	ExtensionPolicy   port.ExtensionPolicy
 	LastRenameHistory []domain.RenamePreview
 	CanUndo           bool
+	// Expanded is the set of folder-tree nodes that are open. Navigation adds
+	// the chain down to the new directory, and the user can still collapse any
+	// of it. Like the sort order it belongs to the session, not to a directory,
+	// so ResetForDirectory leaves it alone.
+	Expanded map[string]bool
+	// ExtraRoot is the tree's second root, for a directory outside the home
+	// folder. It stays put while the user navigates inside it, so the tree
+	// never loses the path back up.
+	ExtraRoot string
+	// PendingDir is a directory the user asked for while typed names were at
+	// stake. It waits here until they discard the names or keep editing.
+	PendingDir string
 }
 
 func NewAppState() *AppState {
@@ -48,6 +60,7 @@ func NewAppState() *AppState {
 		Template:     "name_{index}",
 		Selected:     make(map[string]bool),
 		ManualNames:  make(map[string]string),
+		Expanded:     make(map[string]bool),
 		Sort:         domain.SortOrder{Field: domain.SortByName},
 	}
 }

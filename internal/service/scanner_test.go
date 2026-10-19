@@ -102,3 +102,37 @@ func TestScannerService_DotfileHasNoExtension(t *testing.T) {
 	assert.Equal(t, ".JPG", ext["photo.JPG"])
 	assert.Equal(t, ".tar.gz", ext["xxx.tar.gz"])
 }
+
+func TestScannerService_ListFolders(t *testing.T) {
+	t.Run("lists only directories in natural order", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().ReadDir("/test").Return([]os.DirEntry{
+			testutil.NewMockDirDirEntry("part_10"),
+			testutil.NewMockDirEntry("notes.txt", 10),
+			testutil.NewMockDirDirEntry("part_2"),
+			testutil.NewMockDirDirEntry(".git"),
+		}, nil)
+
+		folders, err := NewScannerService(mockFS).ListFolders("/test")
+		require.NoError(t, err)
+
+		require.Len(t, folders, 3, "files excluded")
+		assert.Equal(t, ".git", folders[0].Name)
+		assert.Equal(t, "part_2", folders[1].Name)
+		assert.Equal(t, "part_10", folders[2].Name)
+		assert.Equal(t, "/test/part_2", folders[1].Path)
+	})
+
+	t.Run("propagates read errors", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockFS := mock.NewMockFileSystem(ctrl)
+
+		mockFS.EXPECT().ReadDir("/denied").Return(nil, os.ErrPermission)
+
+		folders, err := NewScannerService(mockFS).ListFolders("/denied")
+		require.ErrorIs(t, err, os.ErrPermission)
+		assert.Nil(t, folders)
+	})
+}

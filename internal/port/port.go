@@ -32,9 +32,11 @@ type PatternMatcher interface {
 	Match(pattern, name string) (bool, error)
 }
 
-// Scanner scans directories for files.
+// Scanner scans directories for files and folders.
 type Scanner interface {
 	Scan(path string) ([]domain.FileItem, error)
+	// ListFolders returns the immediate subdirectories of path.
+	ListFolders(path string) ([]domain.FolderItem, error)
 }
 
 // PatternFilter filters files by pattern.

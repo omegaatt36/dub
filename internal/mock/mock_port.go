@@ -178,6 +178,21 @@ func (m *MockScanner) EXPECT() *MockScannerMockRecorder {
 	return m.recorder
 }
 
+// ListFolders mocks base method.
+func (m *MockScanner) ListFolders(path string) ([]domain.FolderItem, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListFolders", path)
+	ret0, _ := ret[0].([]domain.FolderItem)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListFolders indicates an expected call of ListFolders.
+func (mr *MockScannerMockRecorder) ListFolders(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFolders", reflect.TypeOf((*MockScanner)(nil).ListFolders), path)
+}
+
 // Scan mocks base method.
 func (m *MockScanner) Scan(path string) ([]domain.FileItem, error) {
 	m.ctrl.T.Helper()

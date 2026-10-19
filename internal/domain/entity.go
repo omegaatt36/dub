@@ -21,6 +21,18 @@ func (f FileItem) IsHidden() bool {
 	return strings.HasPrefix(f.Name, ".")
 }
 
+// FolderItem is a subdirectory as the folder tree lists it.
+type FolderItem struct {
+	Name string
+	Path string
+}
+
+// IsHidden reports whether the folder is a dot-folder, by the same name-only
+// rule FileItem uses.
+func (f FolderItem) IsHidden() bool {
+	return strings.HasPrefix(f.Name, ".")
+}
+
 type RenamePreview struct {
 	// Extension and Size describe the source file. A preview carries them
 	// because previews only cover ticked files, so the UI cannot recover them

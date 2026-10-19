@@ -50,7 +50,11 @@ func main() {
 	pattern := service.NewPatternService(patternMatcher)
 	renamer := service.NewRenamerService(fileSystem)
 
-	dub := app.NewApp(fileSystem, scanner, pattern, renamer, app.WithDirectoryPicker(pickDirectory))
+	opts := []app.Option{app.WithDirectoryPicker(pickDirectory)}
+	if home, err := os.UserHomeDir(); err == nil {
+		opts = append(opts, app.WithHomeDir(home))
+	}
+	dub := app.NewApp(fileSystem, scanner, pattern, renamer, opts...)
 
 	desktop := application.New(application.Options{
 		Name:        "Dub",
@@ -65,7 +69,7 @@ func main() {
 
 	win := desktop.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:          "Dub",
-		Width:          1200,
+		Width:          1400,
 		Height:         900,
 		URL:            "/",
 		EnableFileDrop: true,

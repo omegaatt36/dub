@@ -1,10 +1,20 @@
 package template
 
-// DirectorySelector renders the current folder as a single compact control for
-// the header bar. Long paths truncate at the START so the leaf folder — the
-// part that identifies the directory — always stays readable.
-templ DirectorySelector(selectedDir string) {
-	<div class="flex items-center gap-2 min-w-0 flex-1" style="--wails-draggable: no-drag">
+// Crumb is one segment of the current directory's path.
+type Crumb struct {
+	Name string
+	Path string
+}
+
+// maxCrumbs bounds the path shown in the bar. A deeper path keeps its tail,
+// since the folders nearest the leaf are the ones that identify it.
+const maxCrumbs = 4
+
+// DirectoryBar is the row above the panes: the Open button and the current
+// path, where every ancestor is a link back up. It lives inside the swapped
+// content so it follows every change of directory.
+templ DirectoryBar(data PageData) {
+	<div class="shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3">
 		<button
 			type="button"
 			class="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500"
@@ -16,16 +26,78 @@ templ DirectorySelector(selectedDir string) {
 			<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
 			Open
 		</button>
-		if selectedDir != "" {
-			// direction:rtl makes the ellipsis land at the start of the line.
-			// The inner dir="ltr" span re-isolates the path so its leading "/"
-			// is not reordered to the visual end by the bidi algorithm.
-			<div class="bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 rounded px-2.5 py-1 text-xs text-gray-700 dark:text-gray-300 font-mono flex items-center gap-1.5 min-w-0 flex-1">
-				<svg class="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-				<span class="truncate min-w-0" dir="rtl"><span dir="ltr">{ selectedDir }</span></span>
-			</div>
+		if len(data.Crumbs) > 0 {
+			@breadcrumb(data.Crumbs, data.SelectedDirectory)
 		} else {
 			<span class="text-xs text-gray-500 dark:text-gray-400 italic truncate">No folder selected</span>
 		}
 	</div>
+}
+
+templ breadcrumb(crumbs []Crumb, fullPath string) {
+	<nav aria-label="Current folder" class="min-w-0" title={ fullPath }>
+		<ol class="flex items-center gap-1 text-xs font-mono text-gray-700 dark:text-gray-300 min-w-0">
+			if len(crumbs) > maxCrumbs {
+				<li class="text-gray-400 dark:text-gray-500" aria-hidden="true">…</li>
+				<li class="text-gray-300 dark:text-gray-600" aria-hidden="true">/</li>
+				@crumbItems(crumbs[len(crumbs)-maxCrumbs:])
+			} else {
+				@crumbItems(crumbs)
+			}
+		</ol>
+	</nav>
+}
+
+templ crumbItems(crumbs []Crumb) {
+	for i, c := range crumbs {
+		if i > 0 {
+			<li class="text-gray-300 dark:text-gray-600 shrink-0" aria-hidden="true">/</li>
+		}
+		if i == len(crumbs)-1 {
+			<li class="font-semibold text-gray-900 dark:text-gray-100 truncate min-w-0" aria-current="page">{ c.Name }</li>
+		} else {
+			<li class="shrink-0">
+				<button
+					type="button"
+					class="px-1 py-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+					hx-post="/api/scan"
+					hx-vals={ jsonVals(map[string]string{"path": c.Path}) }
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+					title={ c.Path }
+				>{ c.Name }</button>
+			</li>
+		}
+	}
+}
+
+// DiscardPrompt asks before a directory change throws away typed names. It is
+// not a modal: the names stay on screen and editable until the user decides.
+templ DiscardPrompt(pendingDir string) {
+	if pendingDir != "" {
+		<div class="shrink-0 bg-amber-50 dark:bg-amber-900/30 border-b border-amber-200 dark:border-amber-700/50 px-4 py-2 flex items-center gap-3 text-sm text-amber-900 dark:text-amber-100" role="alert">
+			<span class="min-w-0 truncate">Opening <span class="font-semibold" title={ pendingDir }>{ baseName(pendingDir) }</span> discards the names you typed.</span>
+			<div class="ml-auto flex items-center gap-2 shrink-0">
+				<button
+					type="button"
+					class="text-xs px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-500 text-white font-semibold transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
+					hx-post="/api/scan"
+					hx-vals={ jsonVals(map[string]string{"path": pendingDir, "discard": "true"}) }
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+				>
+					Discard and open
+				</button>
+				<button
+					type="button"
+					class="text-xs px-3 py-1.5 rounded-md text-amber-900 dark:text-amber-100 hover:bg-amber-100 dark:hover:bg-amber-800/50 font-medium transition-colors focus-visible:ring-2 focus-visible:ring-amber-500"
+					hx-post="/api/scan/cancel"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+				>
+					Keep editing
+				</button>
+			</div>
+		</div>
+	}
 }

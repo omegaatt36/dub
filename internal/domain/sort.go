@@ -73,6 +73,13 @@ func NaturalSort(files []FileItem) {
 	})
 }
 
+// SortFolders orders folders in place by natural name order.
+func SortFolders(folders []FolderItem) {
+	slices.SortFunc(folders, func(a, b FolderItem) int {
+		return naturalCompare(a.Name, b.Name)
+	})
+}
+
 func naturalCompare(a, b string) int {
 	aLower := strings.ToLower(a)
 	bLower := strings.ToLower(b)

@@ -7,7 +7,7 @@ import (
 	"github.com/omegaatt36/dub/internal/port"
 )
 
-// ScannerService scans directories for files.
+// ScannerService scans directories for files and folders.
 type ScannerService struct {
 	fs port.FileSystem
 }
@@ -46,4 +46,29 @@ func (s *ScannerService) Scan(path string) ([]domain.FileItem, error) {
 
 	domain.NaturalSort(files)
 	return files, nil
+}
+
+// ListFolders returns the immediate subdirectories of path in natural name
+// order. It reads one level only, so a folder tree can load lazily.
+func (s *ScannerService) ListFolders(path string) ([]domain.FolderItem, error) {
+	entries, err := s.fs.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+
+	var folders []domain.FolderItem
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+
+		name := entry.Name()
+		folders = append(folders, domain.FolderItem{
+			Name: name,
+			Path: filepath.Join(path, name),
+		})
+	}
+
+	domain.SortFolders(folders)
+	return folders, nil
 }

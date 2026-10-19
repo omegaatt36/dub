@@ -172,3 +172,19 @@ func TestFileItemIsHidden(t *testing.T) {
 	assert.False(t, FileItem{Name: "photo.jpg"}.IsHidden())
 	assert.False(t, FileItem{Name: "file.hidden.txt"}.IsHidden())
 }
+
+func TestFolderItem_IsHidden(t *testing.T) {
+	assert.True(t, FolderItem{Name: ".git"}.IsHidden())
+	assert.False(t, FolderItem{Name: "samples"}.IsHidden())
+}
+
+func TestSortFolders(t *testing.T) {
+	folders := []FolderItem{{Name: "Beta"}, {Name: "part_10"}, {Name: "alpha"}, {Name: "part_2"}}
+	SortFolders(folders)
+
+	var got []string
+	for _, f := range folders {
+		got = append(got, f.Name)
+	}
+	assert.Equal(t, []string{"alpha", "Beta", "part_2", "part_10"}, got)
+}
