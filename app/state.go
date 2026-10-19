@@ -14,16 +14,17 @@ type AppState struct {
 	// only set that may be renamed; an empty set means "nothing is ticked",
 	// never "everything is ticked". Scanning selects every file so the common
 	// case (rename all, then tick some off) needs no extra clicks.
-	Selected       map[string]bool
-	Pattern        string
-	PatternError   string
-	NewNames       []string
-	Previews       []domain.RenamePreview
-	Error          string
-	NamingMethod   string // "manual" | "file" | "template" | "findreplace"
-	Template       string
-	SearchPattern  string
-	ReplacePattern string
+	Selected        map[string]bool
+	ShowHiddenFiles bool // Session preference: include dotfiles in the list and rename set.
+	Pattern         string
+	PatternError    string
+	NewNames        []string
+	Previews        []domain.RenamePreview
+	Error           string
+	NamingMethod    string // "manual" | "file" | "template" | "findreplace"
+	Template        string
+	SearchPattern   string
+	ReplacePattern  string
 	// ExtensionPolicy decides whether a rename may change a file's extension.
 	// It defaults to port.KeepExtension; the UI opts in explicitly.
 	ExtensionPolicy   port.ExtensionPolicy

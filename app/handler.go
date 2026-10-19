@@ -27,6 +27,7 @@ func (a *App) newRouter() http.Handler {
 	mux.HandleFunc("POST /api/tick", a.handleTick)
 	mux.HandleFunc("POST /api/tick-all", a.handleTickAll)
 	mux.HandleFunc("POST /api/pattern", a.handlePattern)
+	mux.HandleFunc("POST /api/hidden-files", a.handleHiddenFiles)
 	mux.HandleFunc("POST /api/extension-policy", a.handleExtensionPolicy)
 	mux.HandleFunc("POST /api/names", a.handleNames)
 	mux.HandleFunc("POST /api/names/generate", a.handleNamesGenerate)
@@ -89,7 +90,7 @@ func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.state.AllFiles = files
-	a.state.MatchedFiles = files
+	a.applyFilter()
 	a.state.SelectAllTicks(files)
 	a.state.Error = ""
 
@@ -128,7 +129,7 @@ func (a *App) scanPath(path string) {
 	}
 
 	a.state.AllFiles = files
-	a.state.MatchedFiles = files
+	a.applyFilter()
 	a.state.SelectAllTicks(files)
 	a.state.Error = ""
 	a.logger.Info("directory scanned", "path", path, "file_count", len(files))
@@ -171,6 +172,19 @@ func (a *App) handleTickAll(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.state.ResetForPattern()
+	a.state.Error = ""
+	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+}
+
+// handleHiddenFiles changes visibility and invalidates names and previews built
+// for the previous file set. The preference lasts for the current session.
+func (a *App) handleHiddenFiles(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+
+	a.state.ShowHiddenFiles = r.FormValue("show") == "true"
+	a.state.ResetForPattern()
+	a.applyFilter()
 	a.state.Error = ""
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
@@ -450,15 +464,16 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 // reports the reason through PatternError.
 // Callers must hold a.mu.
 func (a *App) applyFilter() {
+	files := a.filesByVisibility(a.state.AllFiles)
 	if a.state.Pattern == "" {
-		a.state.MatchedFiles = a.state.AllFiles
+		a.state.MatchedFiles = files
 		return
 	}
 
-	matched, err := a.pattern.MatchFiles(a.state.AllFiles, a.state.Pattern)
+	matched, err := a.pattern.MatchFiles(files, a.state.Pattern)
 	if err != nil {
 		a.state.PatternError = err.Error()
-		a.state.MatchedFiles = a.state.AllFiles
+		a.state.MatchedFiles = files
 		return
 	}
 
@@ -515,7 +530,8 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 		VisibleFiles:      visible,
 		ActiveFiles:       active,
 		SelectedPaths:     a.state.Selected,
-		AllFiles:          a.state.AllFiles,
+		AllFiles:          a.filesByVisibility(a.state.AllFiles),
+		ShowHiddenFiles:   a.state.ShowHiddenFiles,
 		MatchedFiles:      a.state.MatchedFiles,
 		TickedCount:       a.state.TickCount(visible),
 		ConflictCount:     countConflicts(a.state.Previews),
@@ -536,13 +552,29 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 }
 
 // visibleFiles is what the file list renders: the pattern-filtered subset when a
-// pattern is active, otherwise every scanned file. Ticking does not affect it,
+// pattern is active, otherwise every scanned file allowed by hidden-file visibility.
+// Ticking does not affect it,
 // so unticked files stay visible (and re-tickable) instead of vanishing.
 func (a *App) visibleFiles() []domain.FileItem {
 	if a.state.Pattern != "" {
-		return a.state.MatchedFiles
+		return a.filesByVisibility(a.state.MatchedFiles)
 	}
-	return a.state.AllFiles
+	return a.filesByVisibility(a.state.AllFiles)
+}
+
+// filesByVisibility excludes dotfiles unless the user explicitly shows them.
+// Keep the scanned list intact so toggling never needs another filesystem scan.
+func (a *App) filesByVisibility(files []domain.FileItem) []domain.FileItem {
+	if a.state.ShowHiddenFiles {
+		return files
+	}
+	visible := make([]domain.FileItem, 0, len(files))
+	for _, f := range files {
+		if !strings.HasPrefix(f.Name, ".") {
+			visible = append(visible, f)
+		}
+	}
+	return visible
 }
 
 // activeFiles is the set a rename actually applies to: visible AND ticked.
