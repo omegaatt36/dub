@@ -135,52 +135,15 @@ func TestHandleExecuteKeepsFilter(t *testing.T) {
 
 // TestHandleUndoKeepsFilter verifies undo restores the same filtered subset.
 func TestHandleUndoKeepsFilter(t *testing.T) {
-	mfs := &mockFS{
-		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-			return []os.DirEntry{
-				&mockDirEntry{name: "other.txt", info: &mockFileInfo{name: "other.txt", size: 100}},
-				&mockDirEntry{name: "keep.txt", info: &mockFileInfo{name: "keep.txt", size: 100}},
-			}, nil
-		},
-		StatFunc: func(path string) (os.FileInfo, error) {
-			return nil, os.ErrNotExist
-		},
-		RenameFunc: func(old, new string) error { return nil },
-	}
-	mpm := &mockPM{
-		MatchFunc: func(pattern, stem string) (bool, error) {
-			return strings.HasPrefix(stem, "keep"), nil
-		},
-	}
-	app := NewApp(
-		mfs,
-		service.NewScannerService(mfs),
-		service.NewPatternService(mpm),
-		service.NewRenamerService(mfs),
-	)
-	handler := app.GetHandler()
-
-	app.state.SelectedDirectory = "/dir"
-	app.state.Pattern = "keep"
-	app.state.CanUndo = true
-	app.state.LastRenameHistory = []domain.RenamePreview{
-		{
-			OriginalName: "keep.txt",
-			NewName:      "renamed.txt",
-			OriginalPath: "/dir/keep.txt",
-			NewPath:      "/dir/renamed.txt",
-		},
-	}
-
-	req := httptest.NewRequest("POST", "/api/undo", nil)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "keep", app.state.Pattern, "filter should survive undo")
+	app, _ := newUXApp(t)
+	renderPost(t, app, "/api/pattern", url.Values{"pattern": {"^a$"}})
+	renderPost(t, app, "/api/names/generate", url.Values{"template": {"renamed"}})
+	renderPost(t, app, "/api/execute", nil)
+	require.True(t, app.state.CanUndo)
+	renderPost(t, app, "/api/undo", nil)
+	assert.Equal(t, "^a$", app.state.Pattern)
 	require.Len(t, app.state.MatchedFiles, 1)
-	assert.Equal(t, "keep.txt", app.state.MatchedFiles[0].Name)
+	assert.Equal(t, "a.txt", app.state.MatchedFiles[0].Name)
 }
 
 // TestHandlePatternInvalidRegex verifies a broken pattern reports the error and
@@ -478,45 +441,12 @@ func TestHandlePreviewClear(t *testing.T) {
 }
 
 func TestHandleExecute(t *testing.T) {
-	renamedPairs := map[string]string{}
-	mfs := &mockFS{
-		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-			return []os.DirEntry{
-				&mockDirEntry{name: "renamed.txt", info: &mockFileInfo{name: "renamed.txt", size: 100}},
-			}, nil
-		},
-		RenameFunc: func(old, new string) error {
-			renamedPairs[old] = new
-			return nil
-		},
-	}
-	mpm := &mockPM{}
-	app := NewApp(
-		mfs,
-		service.NewScannerService(mfs),
-		service.NewPatternService(mpm),
-		service.NewRenamerService(mfs),
-	)
-
-	app.state.SelectedDirectory = "/dir"
-	app.state.AllFiles = []domain.FileItem{
-		{Name: "a.txt", Path: "/dir/a.txt", Extension: ".txt"},
-	}
-	app.state.MatchedFiles = app.state.AllFiles
-	app.state.SelectAllTicks(app.state.AllFiles)
-	app.state.Previews = []domain.RenamePreview{
-		{OriginalName: "a.txt", NewName: "renamed.txt", OriginalPath: "/dir/a.txt", NewPath: "/dir/renamed.txt"},
-	}
-
-	handler := app.GetHandler()
-
-	req := httptest.NewRequest("POST", "/api/execute", nil)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	assert.Contains(t, renamedPairs, "/dir/a.txt")
+	app, dir := newUXApp(t)
+	renderPost(t, app, "/api/names/generate", url.Values{"template": {"renamed_{index}"}})
+	renderPost(t, app, "/api/execute", nil)
+	assert.FileExists(t, filepath.Join(dir, "renamed_1.txt"))
+	assert.NoFileExists(t, filepath.Join(dir, "a.txt"))
+	assert.True(t, app.state.CanUndo)
 	assert.Empty(t, app.state.Previews)
 }
 
@@ -647,50 +577,14 @@ func TestHandleExecuteLogsResult(t *testing.T) {
 }
 
 func TestHandleUndo(t *testing.T) {
-	renamedPairs := map[string]string{}
-	mfs := &mockFS{
-		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-			return []os.DirEntry{
-				&mockDirEntry{name: "a.txt", info: &mockFileInfo{name: "a.txt", size: 100}},
-			}, nil
-		},
-		RenameFunc: func(old, new string) error {
-			renamedPairs[old] = new
-			return nil
-		},
-	}
-	mpm := &mockPM{}
-	app := NewApp(
-		mfs,
-		service.NewScannerService(mfs),
-		service.NewPatternService(mpm),
-		service.NewRenamerService(mfs),
-	)
-
-	// Simulate state after a successful execute
-	app.state.SelectedDirectory = "/dir"
-	app.state.CanUndo = true
-	app.state.LastRenameHistory = []domain.RenamePreview{
-		{
-			OriginalName: "a.txt",
-			NewName:      "renamed.txt",
-			OriginalPath: "/dir/a.txt",
-			NewPath:      "/dir/renamed.txt",
-		},
-	}
-
-	handler := app.GetHandler()
-
-	req := httptest.NewRequest("POST", "/api/undo", nil)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	assert.Equal(t, http.StatusOK, rec.Code)
-	// Undo should reverse: renamed.txt -> a.txt
-	assert.Contains(t, renamedPairs, "/dir/renamed.txt")
-	assert.Equal(t, "/dir/a.txt", renamedPairs["/dir/renamed.txt"])
-	assert.False(t, app.state.CanUndo, "CanUndo should be false after undo")
+	app, dir := newUXApp(t)
+	renderPost(t, app, "/api/names/generate", url.Values{"template": {"renamed_{index}"}})
+	renderPost(t, app, "/api/execute", nil)
+	require.True(t, app.state.CanUndo)
+	renderPost(t, app, "/api/undo", nil)
+	assert.FileExists(t, filepath.Join(dir, "a.txt"))
+	assert.NoFileExists(t, filepath.Join(dir, "renamed_1.txt"))
+	assert.False(t, app.state.CanUndo)
 }
 
 func TestHandleUndoNothingToUndo(t *testing.T) {
@@ -741,40 +635,17 @@ func TestScanTicksEverything(t *testing.T) {
 // TestUntickedFileIsNeverRenamed is the core safety property: the rename must
 // only touch ticked files.
 func TestUntickedFileIsNeverRenamed(t *testing.T) {
-	renamed := map[string]string{}
-	mfs := &mockFS{
-		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-			return []os.DirEntry{
-				&mockDirEntry{name: "a.txt", info: &mockFileInfo{name: "a.txt", size: 1}},
-				&mockDirEntry{name: "b.txt", info: &mockFileInfo{name: "b.txt", size: 1}},
-			}, nil
-		},
-		StatFunc:   func(path string) (os.FileInfo, error) { return nil, os.ErrNotExist },
-		RenameFunc: func(old, nw string) error { renamed[old] = nw; return nil },
-	}
-	app := NewApp(mfs, service.NewScannerService(mfs), service.NewPatternService(&mockPM{}), service.NewRenamerService(mfs))
-	scanSelectionApp(t, app)
-
-	// Untick b.txt, then generate names for whatever is still active.
-	form := url.Values{"path": {"/dir/b.txt"}, "ticked": {"false"}}
-	req := httptest.NewRequest("POST", "/api/tick", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	app.GetHandler().ServeHTTP(httptest.NewRecorder(), req)
-
-	genForm := url.Values{"template": {"renamed_{index}"}}
-	genReq := httptest.NewRequest("POST", "/api/names/generate", strings.NewReader(genForm.Encode()))
-	genReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	app.GetHandler().ServeHTTP(httptest.NewRecorder(), genReq)
-
-	require.Len(t, app.state.Previews, 1, "only the ticked file should be previewed")
+	app, dir := newUXApp(t)
+	renderPost(t, app, "/api/tick", url.Values{"path": {filepath.Join(dir, "b.jpg")}, "ticked": {"false"}})
+	renderPost(t, app, "/api/tick", url.Values{"path": {filepath.Join(dir, "c.pdf")}, "ticked": {"false"}})
+	renderPost(t, app, "/api/names/generate", url.Values{"template": {"renamed_{index}"}})
+	require.Len(t, app.state.Previews, 1)
 	assert.Equal(t, "a.txt", app.state.Previews[0].OriginalName)
-
-	execReq := httptest.NewRequest("POST", "/api/execute", nil)
-	execReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	app.GetHandler().ServeHTTP(httptest.NewRecorder(), execReq)
-
-	assert.Contains(t, renamed, "/dir/a.txt", "the ticked file is renamed")
-	assert.NotContains(t, renamed, "/dir/b.txt", "the unticked file must never be renamed")
+	renderPost(t, app, "/api/execute", nil)
+	assert.FileExists(t, filepath.Join(dir, "renamed_1.txt"))
+	assert.NoFileExists(t, filepath.Join(dir, "a.txt"))
+	assert.FileExists(t, filepath.Join(dir, "b.jpg"))
+	assert.FileExists(t, filepath.Join(dir, "c.pdf"))
 }
 
 // TestUntickingRebuildsNamesForTheNewSet guards the index-coupling bug: names are

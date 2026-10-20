@@ -3,6 +3,7 @@ package fs
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/omegaatt36/dub/internal/domain"
 )
@@ -27,7 +28,15 @@ func (f *OSFileSystem) Stat(path string) (os.FileInfo, error) {
 }
 
 func (f *OSFileSystem) Rename(oldpath, newpath string) error {
-	return os.Rename(oldpath, newpath)
+	if filepath.Dir(oldpath) != filepath.Dir(newpath) {
+		return fmt.Errorf("rename must stay in one directory")
+	}
+	session, err := f.OpenRenameDirectory(filepath.Dir(oldpath))
+	if err != nil {
+		return err
+	}
+	defer session.Close()
+	return session.Rename(filepath.Base(oldpath), filepath.Base(newpath))
 }
 
 func (f *OSFileSystem) ReadFile(path string) ([]byte, error) {

@@ -148,8 +148,8 @@ func TestExtensionToggleRenders(t *testing.T) {
 
 	assert.Contains(t, body, "/api/extension-policy")
 	assert.Contains(t, body, "Allow changing the extension")
-	// templ emits boolean attributes literally, so "off" is checked="false".
-	assert.Contains(t, body, `checked="false"`, "extension conversion must default to off")
+	assert.NotContains(t, body, `checked="false"`)
+	assert.NotContains(t, body, `<input type="checkbox" checked`, "extension conversion must default to off")
 }
 
 // TestExtensionWarningRenders verifies the confirm step warns about the real

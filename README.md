@@ -27,6 +27,10 @@ Or click "Cancel" on the warning, then System Settings → Privacy & Security �
 
 Switching folders asks first if you have typed names, since those exist nowhere else; `Esc` answers "keep editing". A template or Find & Replace rule needs no warning. A folder that cannot be read leaves you where you were, and **Undo** keeps working after you move to another folder.
 
+New names must be single filenames. Paths such as `~/photos/image.jpg`, `../image.jpg`, and absolute paths are rejected.
+Rename and Undo stay in the original directory and never replace existing files outside the batch.
+If the directory identity changes, execution stops before any file moves.
+
 Shortcuts: `⌘O` (`Ctrl+O` on Linux) opens a folder, `⌘R` (`Ctrl+R`) refreshes it, `⌘Enter` starts the rename, `Esc` backs out of the confirmation, and `⌘Z` undoes the last batch. In the folder tree, the arrow keys move and open or close folders, and `Enter` opens one.
 
 ## Rename Modes
@@ -77,11 +81,13 @@ Common tasks are defined in `Taskfile.yml` and run through [Task](https://taskfi
 task dev      # templ + tailwind watchers, then go run .
 task build    # production build via wails3
 task package  # .dmg on macOS, .tar.gz on Linux
-task test     # go test -race ./...
+task test     # Go race tests and frontend regression tests
 task check    # go vet, golangci-lint, govulncheck
 ```
 
 You need [Go](https://go.dev/dl/) 1.27+, [Task](https://taskfile.dev/), the [Wails v3](https://v3.wails.io/getting-started/installation/) CLI (`wails3`), and the Tailwind CSS standalone CLI at `./tailwindcss` in the repository root. Templ, golangci-lint, and govulncheck come from `go.mod`, so `go tool` resolves them for you.
+
+Frontend regression tests run through `go test` with system JavaScriptCore. They use the platform libraries required by Wails.
 
 There is no `wails3 dev` task: that command expects a frontend dev server to proxy to, and dub has no bundler. `task dev` runs the watchers and the app directly instead.
 

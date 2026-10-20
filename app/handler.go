@@ -268,6 +268,8 @@ func (a *App) handleNames(w http.ResponseWriter, r *http.Request) {
 		}
 		a.state.NewNames = names
 		a.state.NamesTyped = true
+		a.state.AppliedMethod = "manual"
+		a.rememberManualNames()
 		a.autoPreview()
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
@@ -298,6 +300,8 @@ func (a *App) handleNamesGenerate(w http.ResponseWriter, r *http.Request) {
 	a.state.NewNames = templateNames(a.activeFiles(), tmpl)
 	a.state.NamesTyped = false
 	a.state.NamingMethod = "template"
+	a.state.AppliedMethod = "template"
+	a.state.Error = ""
 	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -318,12 +322,16 @@ func (a *App) handleNamesFindReplace(w http.ResponseWriter, r *http.Request) {
 	names, err := domain.FindReplace(files, search, replace)
 	if err != nil {
 		a.state.Error = fmt.Sprintf("Invalid search pattern: %v", err)
+		a.state.Previews = nil
+		a.state.NewNames = nil
+		a.state.AppliedMethod = ""
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
 
 	a.state.NewNames = names
 	a.state.NamesTyped = false
+	a.state.AppliedMethod = "findreplace"
 	a.state.Error = ""
 	a.autoPreview()
 
@@ -354,6 +362,8 @@ func (a *App) handleNamesUpload(w http.ResponseWriter, r *http.Request) {
 	a.state.NewNames = namesFromLines(strings.NewReader(string(content)))
 	a.state.NamesTyped = false
 	a.state.NamingMethod = "file"
+	a.state.AppliedMethod = "file"
+	a.state.LoadedNames = slices.Clone(a.state.NewNames)
 	a.autoPreview()
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
@@ -398,6 +408,8 @@ func (a *App) loadNamesPath(path string) {
 	a.state.NewNames = namesFromLines(bytes.NewReader(content))
 	a.state.NamesTyped = false
 	a.state.NamingMethod = "file"
+	a.state.AppliedMethod = "file"
+	a.state.LoadedNames = slices.Clone(a.state.NewNames)
 	a.autoPreview()
 }
 
@@ -406,8 +418,8 @@ func (a *App) handlePreview(w http.ResponseWriter, r *http.Request) {
 	defer a.mu.Unlock()
 
 	if r.FormValue("clear") == "true" {
-		a.state.NewNames = nil
-		a.state.ClearPreviews()
+		a.state.ResetForExecute()
+		a.state.Error = ""
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
@@ -435,13 +447,19 @@ func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
+	if err := validateRenameScope(a.state.Previews, a.state.SelectedDirectory); err != nil {
+		a.state.Error = err.Error()
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
 
 	result := a.renamer.ExecuteRename(a.state.Previews)
 
 	// Save undo history before resetting state
-	if result.Success {
-		a.state.LastRenameHistory = make([]domain.RenamePreview, len(a.state.Previews))
-		copy(a.state.LastRenameHistory, a.state.Previews)
+	if result.Success && result.RenamedCount > 0 {
+		a.state.LastRenameHistory = slices.DeleteFunc(slices.Clone(a.state.Previews), func(p domain.RenamePreview) bool {
+			return p.OriginalPath == p.NewPath
+		})
 		a.state.LastRenameDir = a.state.SelectedDirectory
 		a.state.CanUndo = true
 	}
@@ -465,11 +483,18 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
 	}
+	if err := validateRenameScope(a.state.LastRenameHistory, a.state.LastRenameDir); err != nil {
+		a.state.Error = "Undo blocked: " + err.Error()
+		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		return
+	}
 
 	// Build reversed previews: swap Original <-> New
 	reversed := make([]domain.RenamePreview, len(a.state.LastRenameHistory))
-	for i, p := range a.state.LastRenameHistory {
+	for i := range a.state.LastRenameHistory {
+		p := a.state.LastRenameHistory[len(a.state.LastRenameHistory)-1-i]
 		reversed[i] = domain.RenamePreview{
+			DirectoryID:  p.DirectoryID,
 			OriginalName: p.NewName,
 			NewName:      p.OriginalName,
 			OriginalPath: p.NewPath,
@@ -479,19 +504,38 @@ func (a *App) handleUndo(w http.ResponseWriter, r *http.Request) {
 
 	result := a.renamer.ExecuteRename(reversed)
 	elsewhere := a.undoElsewhere()
-	a.state.CanUndo = false
-	a.state.LastRenameHistory = nil
-	a.state.LastRenameDir = ""
+	if result.Success {
+		a.state.CanUndo = false
+		a.state.LastRenameHistory = nil
+		a.state.LastRenameDir = ""
+		a.state.Error = ""
+	}
 
 	a.logger.Info("undo executed", "restored_count", result.RenamedCount, "error_count", len(result.Errors))
 
 	// The restored files live in another folder when the user has moved on, so
 	// rescanning the one in view would only discard their ticks for nothing.
 	if !elsewhere {
+		if result.Success {
+			a.state.ResetForExecute()
+		}
 		a.refreshFiles()
 	}
 
 	renderTempl(w, r, template.MainContent(a.buildPageData(&result)))
+}
+
+func validateRenameScope(previews []domain.RenamePreview, dir string) error {
+	if !filepath.IsAbs(dir) || filepath.Clean(dir) != dir {
+		return fmt.Errorf("rename requires an absolute directory")
+	}
+	for _, p := range previews {
+		if filepath.Dir(p.OriginalPath) != dir || filepath.Dir(p.NewPath) != dir ||
+			filepath.Clean(p.OriginalPath) != p.OriginalPath || filepath.Clean(p.NewPath) != p.NewPath {
+			return fmt.Errorf("rename paths must stay inside their original directory")
+		}
+	}
+	return nil
 }
 
 // undoElsewhere reports whether the rename Undo would reverse happened in a
@@ -633,7 +677,7 @@ func (a *App) setScanned(files []domain.FileItem) {
 // unticking one file does not cost the user a trip back to "Apply".
 // Callers must hold a.mu.
 func (a *App) changeFileSet(mutate func()) {
-	applied := len(a.state.NewNames) > 0
+	applied := a.state.AppliedMethod != ""
 	a.rememberManualNames()
 	mutate()
 	if applied {
@@ -645,7 +689,7 @@ func (a *App) changeFileSet(mutate func()) {
 // set changes, because NewNames is positional and would otherwise misattribute
 // them as soon as one file leaves or the order moves.
 func (a *App) rememberManualNames() {
-	if a.state.NamingMethod != "manual" {
+	if a.state.AppliedMethod != "manual" {
 		return
 	}
 	files := a.activeFiles()
@@ -669,7 +713,7 @@ func (a *App) rebuildNames() {
 		return
 	}
 
-	switch a.state.NamingMethod {
+	switch a.state.AppliedMethod {
 	case "template":
 		a.state.NewNames = templateNames(files, a.state.Template)
 	case "findreplace":
@@ -686,6 +730,8 @@ func (a *App) rebuildNames() {
 			names[i] = a.state.ManualNames[f.Path]
 		}
 		a.state.NewNames = names
+	case "file":
+		a.state.NewNames = slices.Clone(a.state.LoadedNames)
 	}
 	a.autoPreview()
 }

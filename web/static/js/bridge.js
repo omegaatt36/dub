@@ -11,11 +11,13 @@
 
   // Store input state before HTMX Swap
   let savedInputState = null;
+  let savedManualDrafts = new Map();
 
   // Manual-name forms whose debounced save has not fired yet. Leaving the folder
   // before it does would show the server a stale list of typed names, so the
   // navigation flushes these first (see flushPendingSaves).
   const pendingSaves = new Set();
+  let manualSaveDrain = null;
 
   // The element that held focus before a swap is replaced by the swap. Elements
   // that carry data-focus-key are looked up again afterwards, so a keyboard
@@ -91,9 +93,12 @@
 
     const timerId = setTimeout(() => {
       if (!isComposing) {
-        pendingSaves.delete(triggerTarget);
-        htmx.trigger(triggerTarget, eventName);
         timers.delete(timerKey);
+        if (triggerTarget.matches?.("form[data-auto-save]")) {
+          flushPendingSaves();
+        } else {
+          htmx.trigger(triggerTarget, eventName);
+        }
       }
     }, delay);
 
@@ -110,48 +115,56 @@
    */
   window.__dubFlushImpl = flushPendingSaves;
   function flushPendingSaves() {
-    const sends = [];
-    for (const form of pendingSaves) {
-      pendingSaves.delete(form);
-      if (!form.isConnected) continue;
-      clearTimeout(timers.get(form));
-      timers.delete(form);
+    if (manualSaveDrain) return manualSaveDrain;
 
-      const params = new URLSearchParams(new FormData(form));
-      for (const [key, value] of Object.entries(JSON.parse(form.getAttribute("hx-vals") || "{}"))) {
-        params.set(key, value);
-      }
-      sends.push(
-        htmx.ajax("POST", `${form.getAttribute("hx-post")}?${params}`, {
+    const drain = async () => {
+      while (pendingSaves.size) {
+        const form = pendingSaves.values().next().value;
+        pendingSaves.delete(form);
+        if (!form.isConnected) continue;
+        clearTimeout(timers.get(form));
+        timers.delete(form);
+
+        const params = new URLSearchParams(new FormData(form));
+        for (const [key, value] of Object.entries(JSON.parse(form.getAttribute("hx-vals") || "{}"))) {
+          params.set(key, value);
+        }
+        await htmx.ajax("POST", `${form.getAttribute("hx-post")}?${params}`, {
+          source: "#manual-save-source",
           target: "#main-content",
           swap: "innerHTML",
-        }),
-      );
-    }
-    return Promise.all(sends);
+        });
+      }
+    };
+    manualSaveDrain = drain().then(
+      () => { manualSaveDrain = null; },
+      (error) => { manualSaveDrain = null; throw error; },
+    );
+    return manualSaveDrain;
   }
 
-  // A click that changes folder waits for the flush, then replays itself. It
-  // cannot simply be re-dispatched: the flush swaps the page and the button
-  // that was clicked is gone by then.
-  document.addEventListener(
-    "click",
-    (e) => {
-      const nav = e.target.closest?.('[hx-post="/api/scan"]');
-      if (!nav || ![...pendingSaves].some((f) => f.isConnected)) return;
+  const draftMutations = new Set([
+    "/api/scan", "/api/select-directory", "/api/tick", "/api/tick-all",
+    "/api/pattern", "/api/sort", "/api/hidden-files", "/api/names",
+    "/api/names/upload", "/api/names/generate", "/api/names/findreplace",
+    "/api/extension-policy", "/api/refresh", "/api/preview", "/api/execute", "/api/undo",
+  ]);
+  document.addEventListener("htmx:before:request", (event) => {
+    const ctx = event.detail?.ctx;
+    if (!ctx) return;
+    const path = ctx.request.action.split("?")[0];
+    if (path === "/api/names" && ctx.request.action.includes("?")) return;
+    if (!draftMutations.has(path)) return;
+    if (!manualSaveDrain && ![...pendingSaves].some((form) => form.isConnected)) return;
 
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const vals = JSON.parse(nav.getAttribute("hx-vals") || "{}");
-      flushPendingSaves().then(() =>
-        htmx.ajax("POST", `/api/scan?${new URLSearchParams(vals)}`, {
-          target: "#main-content",
-          swap: "innerHTML",
-        }),
-      );
-    },
-    true,
-  );
+    const fetchRequest = ctx.fetch;
+    const targetID = ctx.target?.id;
+    ctx.fetch = async (...args) => {
+      await flushPendingSaves();
+      if (targetID) ctx.target = document.getElementById(targetID) || ctx.target;
+      return fetchRequest(...args);
+    };
+  });
 
   // --- Smart Swap Preservation (Restore cursor & value) ---
 
@@ -160,6 +173,17 @@
     if (isComposing) {
       evt.preventDefault();
       return;
+    }
+
+    savedManualDrafts = new Map();
+    for (const form of pendingSaves) {
+      if (!form.isConnected) continue;
+      for (const input of form.querySelectorAll("input[data-file-path]")) {
+        savedManualDrafts.set(input.dataset.filePath, input.value);
+      }
+      clearTimeout(timers.get(form));
+      timers.delete(form);
+      pendingSaves.delete(form);
     }
 
     savedScrolls = [...document.querySelectorAll("[data-dub-scroll]")].map(
@@ -178,6 +202,7 @@
     ) {
       savedInputState = {
         name: activeEl.name,
+        filePath: activeEl.dataset.filePath,
         value: activeEl.value,
         selectionStart: activeEl.selectionStart,
         selectionEnd: activeEl.selectionEnd,
@@ -195,12 +220,24 @@
     }
     savedScrolls = [];
 
+    for (const input of document.querySelectorAll("input[data-file-path]")) {
+      if (!savedManualDrafts.has(input.dataset.filePath)) continue;
+      const value = savedManualDrafts.get(input.dataset.filePath);
+      input.value = value;
+      handleSmartInput(input);
+    }
+    savedManualDrafts.clear();
+
     restoreFocus();
     focusDiscardPrompt();
 
     if (!savedInputState) return;
 
-    const input = document.querySelector(`[name="${savedInputState.name}"]`);
+    const input = savedInputState.filePath
+      ? [...document.querySelectorAll("input[data-file-path]")].find(
+          (el) => el.dataset.filePath === savedInputState.filePath,
+        )
+      : document.querySelector(`[name="${savedInputState.name}"]`);
     if (input) {
       input.value = savedInputState.value;
       input.focus();
@@ -339,7 +376,7 @@
 
     const hasFolder = document.querySelector('[hx-post="/api/refresh"]');
     const typing = [...pendingSaves].some((f) => f.isConnected);
-    if (!hasFolder || typing || isComposing) return;
+    if (!hasFolder || typing || manualSaveDrain || isComposing) return;
 
     htmx.ajax("POST", "/api/refresh?silent=true", {
       target: "#main-content",
@@ -380,6 +417,8 @@
 
   // --- Keyboard Shortcuts ---
   document.addEventListener("keydown", (e) => {
+    if (isComposing || e.isComposing || e.keyCode === 229) return;
+
     const isMod = e.metaKey || e.ctrlKey;
 
     // Enter advances to the next name in the manual editor. Without this,

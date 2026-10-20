@@ -32,6 +32,8 @@ type AppState struct {
 	Previews       []domain.RenamePreview
 	Error          string
 	NamingMethod   string // "manual" | "file" | "template" | "findreplace"
+	AppliedMethod  string
+	LoadedNames    []string
 	Template       string
 	SearchPattern  string
 	ReplacePattern string
@@ -125,6 +127,8 @@ func (s *AppState) ResetForDirectory() {
 	s.Previews = nil
 	s.Error = ""
 	s.NamesTyped = false
+	s.AppliedMethod = ""
+	s.LoadedNames = nil
 	s.ExtensionPolicy = port.KeepExtension
 }
 
@@ -145,5 +149,7 @@ func (s *AppState) ResetForExecute() {
 	s.NewNames = nil
 	s.Previews = nil
 	s.NamesTyped = false
+	s.AppliedMethod = ""
+	s.LoadedNames = nil
 	clear(s.ManualNames)
 }

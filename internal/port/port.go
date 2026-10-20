@@ -49,3 +49,14 @@ type Renamer interface {
 	PreviewRename(files []domain.FileItem, newNames []string, policy ExtensionPolicy) ([]domain.RenamePreview, error)
 	ExecuteRename(previews []domain.RenamePreview) domain.RenameResult
 }
+
+type RenameDirectory interface {
+	Identity() (string, error)
+	ReadDir() ([]os.DirEntry, error)
+	Rename(oldName, newName string) error
+	Close() error
+}
+
+type RenameDirectoryOpener interface {
+	OpenRenameDirectory(path string) (RenameDirectory, error)
+}

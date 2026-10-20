@@ -94,7 +94,7 @@ templ FileList(data PageData) {
 			if len(data.VisibleFiles) == 0 {
 				@emptyState(data)
 			} else if len(data.Previews) > 0 {
-				@previewTable(data.Previews)
+				@previewTable(data.VisibleFiles, data.SelectedPaths, previewsByPath(data.Previews))
 			} else {
 				@nameTable(data.VisibleFiles, data.SelectedPaths)
 			}
@@ -138,10 +138,11 @@ templ emptyState(data PageData) {
 	</div>
 }
 
-templ previewTable(previews []domain.RenamePreview) {
+templ previewTable(files []domain.FileItem, selected map[string]bool, previews map[string]domain.RenamePreview) {
 	<table class="w-full text-sm text-left border-collapse" aria-label="Rename preview">
 		<thead class="sticky top-0 z-10 bg-white/95 dark:bg-gray-800/95 backdrop-blur shadow-sm text-xs font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider">
 			<tr>
+				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700 w-10"><span class="sr-only">Selected</span></th>
 				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">Original</th>
 				<th scope="col" class="px-2 py-3 border-b border-gray-200 dark:border-gray-700 w-8"><span class="sr-only">Status</span></th>
 				<th scope="col" class="px-4 py-3 border-b border-gray-200 dark:border-gray-700">New Name</th>
@@ -149,12 +150,26 @@ templ previewTable(previews []domain.RenamePreview) {
 			</tr>
 		</thead>
 		<tbody class="divide-y divide-gray-200/50 dark:divide-gray-700/50">
-			for _, p := range previews {
+			for _, f := range files {
+				{{ p := previewForFile(f, previews) }}
 				<tr
 					class={ "group transition-colors duration-150",
+						templ.KV("bg-gray-100/60 dark:bg-gray-900/30 opacity-60", !selected[f.Path]),
 						templ.KV("bg-red-50 dark:bg-red-900/15", p.Conflict),
 						templ.KV("hover:bg-gray-100/50 dark:hover:bg-gray-700/50", !p.Conflict) }
 				>
+					<td class="px-4 py-2">
+						<input
+							type="checkbox"
+							checked?={ selected[f.Path] }
+							hx-post="/api/tick"
+							hx-vals={ tickVals(f.Path, selected[f.Path]) }
+							hx-target="#main-content"
+							hx-swap="innerHTML"
+							aria-label={ tickLabel(f) }
+							class="w-4 h-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
+						/>
+					</td>
 					<td class="px-4 py-2.5 max-w-xs truncate text-gray-900 dark:text-gray-300">
 						<div class="flex items-center gap-2.5">
 							@FileIcon(domain.FileTypeIcon(p.Extension))
@@ -216,7 +231,7 @@ templ nameTable(files []domain.FileItem, selected map[string]bool) {
 					<td class="px-4 py-2">
 						<input
 							type="checkbox"
-							checked={ selected[f.Path] }
+							checked?={ selected[f.Path] }
 							hx-post="/api/tick"
 							hx-vals={ tickVals(f.Path, selected[f.Path]) }
 							hx-target="#main-content"
@@ -275,4 +290,19 @@ templ DiffSegments(segments []domain.DiffSegment) {
 				<span class="bg-emerald-200 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-400 rounded-sm px-0.5">{ seg.Text }</span>
 		}
 	}
+}
+
+func previewsByPath(previews []domain.RenamePreview) map[string]domain.RenamePreview {
+	result := make(map[string]domain.RenamePreview, len(previews))
+	for _, preview := range previews {
+		result[preview.OriginalPath] = preview
+	}
+	return result
+}
+
+func previewForFile(file domain.FileItem, previews map[string]domain.RenamePreview) domain.RenamePreview {
+	if preview, ok := previews[file.Path]; ok {
+		return preview
+	}
+	return domain.RenamePreview{OriginalName: file.Name, NewName: file.Name, OriginalPath: file.Path, Extension: file.Extension, Size: file.Size}
 }

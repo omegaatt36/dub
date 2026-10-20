@@ -68,7 +68,7 @@ func TestPreviewRowsShowTheirOwnSizeWhenSomeFilesAreUnticked(t *testing.T) {
 
 	assert.Contains(t, body, "4.9 KB", "b.jpg keeps its own size")
 	assert.Contains(t, body, "2.9 MB", "c.pdf keeps its own size")
-	assert.NotRegexp(t, regexp.MustCompile(`>\s*1 B\s*<`), body, "unticked a.txt must not lend its size to another row")
+	assert.Regexp(t, regexp.MustCompile(`>\s*1 B\s*<`), body, "unticked a.txt remains visible with its own size")
 }
 
 func TestRevealedHiddenFilesStartUnticked(t *testing.T) {

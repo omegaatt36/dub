@@ -6,7 +6,8 @@ import (
 )
 
 templ PatternInput(pattern string, totalCount, matchedCount int, patternError string, enabled bool) {
-	<div
+	<fieldset
+		disabled?={ !enabled }
 		class={ "bg-white dark:bg-gray-800 rounded-lg p-4 border border-gray-200 dark:border-gray-700 shadow-sm",
 		templ.KV("opacity-50 pointer-events-none", !enabled) }
 		if !enabled {
@@ -106,5 +107,5 @@ templ PatternInput(pattern string, totalCount, matchedCount int, patternError st
 				<option value="_">Contains underscore</option>
 			</select>
 		</div>
-	</div>
+	</fieldset>
 }

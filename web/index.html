@@ -20,6 +20,7 @@
         <script src="/static/js/bridge.js"></script>
     </head>
     <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
+        <div id="manual-save-source" hidden aria-hidden="true"></div>
         <div id="busy-bar" aria-hidden="true"></div>
         <div id="app" class="h-screen" hx-get="/api/page" hx-trigger="load" hx-swap="innerHTML"></div>
     </body>

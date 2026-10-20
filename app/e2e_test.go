@@ -311,7 +311,6 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 	}
 	assert.Equal(t, 2, conflicts)
 
-	// Execute — should only rename the non-conflict file
 	req = httptest.NewRequest("POST", "/api/execute", nil)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	rec = httptest.NewRecorder()
@@ -326,8 +325,8 @@ func TestE2E_ConflictPrevention(t *testing.T) {
 
 	assert.True(t, names["a.txt"], "a.txt should still exist (conflict)")
 	assert.True(t, names["b.txt"], "b.txt should still exist (conflict)")
-	assert.True(t, names["unique.txt"], "unique.txt should exist (renamed from c.txt)")
-	assert.False(t, names["c.txt"], "c.txt should be gone (renamed to unique.txt)")
+	assert.False(t, names["unique.txt"], "a rejected batch must not rename any file")
+	assert.True(t, names["c.txt"], "the non-conflicting file must also remain unchanged")
 }
 
 // TestE2E_UndoRename tests: scan → generate names → preview → execute → undo

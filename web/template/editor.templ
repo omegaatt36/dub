@@ -92,10 +92,6 @@ func tabID(method string) string {
 	return "tab-" + method
 }
 
-// ManualEditor edits one name per ticked file. The file list beside it already
-// shows the resulting full filename, so this panel deliberately shows only the
-// stem — duplicating the list here is what made the two views disagree about
-// whether ".pdf" was included.
 templ ManualEditor(files []domain.FileItem, names []string) {
 	<form
 		id="manual-names-form"
@@ -111,20 +107,24 @@ templ ManualEditor(files []domain.FileItem, names []string) {
 	>
 		<div data-dub-scroll="manual-names" class="flex-1 min-h-0 overflow-y-auto space-y-1 pr-1">
 			for i, f := range files {
-				<div class="flex items-center gap-2">
-					<label for={ fmt.Sprintf("name-%d", i) } class="text-xs text-gray-500 dark:text-gray-400 w-5 text-right shrink-0 font-mono">{ fmt.Sprintf("%d", i+1) }</label>
-					<input
-						id={ fmt.Sprintf("name-%d", i) }
-						type="text"
-						name={ fmt.Sprintf("name_%d", i) }
-						value={ getName(names, i) }
-						placeholder={ strings.TrimSuffix(f.Name, f.Extension) }
-						spellcheck="false"
-						autocomplete="off"
-						data-enter-next="true"
-						class="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-600"
-					/>
-					<span class="text-xs text-gray-400 dark:text-gray-500 font-mono shrink-0 truncate" title="The extension is kept automatically">{ f.Extension }</span>
+				<div class="flex flex-col gap-1">
+					<label for={ fmt.Sprintf("name-%d", i) } class="text-xs text-gray-500 dark:text-gray-400 truncate" title={ f.Name }>{ f.Name }</label>
+					<div class="flex items-center gap-2">
+						<input
+							id={ fmt.Sprintf("name-%d", i) }
+							type="text"
+							name={ fmt.Sprintf("name_%d", i) }
+							value={ getName(names, i) }
+							placeholder={ strings.TrimSuffix(f.Name, f.Extension) }
+							spellcheck="false"
+							autocomplete="off"
+							data-enter-next="true"
+							aria-label={ "New name for " + f.Name }
+							data-file-path={ f.Path }
+							class="flex-1 min-w-0 bg-gray-100 dark:bg-gray-900/50 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-gray-200 rounded px-2 py-1 text-sm focus:ring-1 focus:ring-blue-500 focus:border-blue-500 transition-colors placeholder-gray-400 dark:placeholder-gray-600"
+						/>
+						<span class="text-xs text-gray-400 dark:text-gray-500 font-mono shrink-0 truncate" title="The extension is kept automatically">{ f.Extension }</span>
+					</div>
 				</div>
 			}
 		</div>
@@ -133,10 +133,11 @@ templ ManualEditor(files []domain.FileItem, names []string) {
 
 templ FileEditor(names []string) {
 	<div class="h-full flex flex-col min-h-0">
-		<div data-file-drop-target="names" class="bg-gray-100 dark:bg-gray-900/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-gray-900 transition-all cursor-pointer relative group shrink-0">
+		<div data-file-drop-target="names" class="bg-gray-100 dark:bg-gray-900/50 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg p-6 text-center hover:border-blue-500/50 hover:bg-gray-200 dark:hover:bg-gray-900 transition-all cursor-pointer relative group shrink-0 focus-within:ring-2 focus-within:ring-blue-500">
 			<input
 				type="file"
 				name="namesfile"
+				aria-label="Upload names from a text or CSV file"
 				accept=".txt,.csv"
 				class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
 				hx-post="/api/names/upload"
@@ -223,7 +224,7 @@ templ extensionToggle(allow bool) {
 	<label class="flex items-start gap-2 mt-3 pt-3 border-t border-gray-200 dark:border-gray-700 cursor-pointer group">
 		<input
 			type="checkbox"
-			checked={ allow }
+			checked?={ allow }
 			hx-post="/api/extension-policy"
 			hx-vals={ extPolicyVals(allow) }
 			hx-target="#main-content"

@@ -34,6 +34,7 @@ func (f FolderItem) IsHidden() bool {
 }
 
 type RenamePreview struct {
+	DirectoryID string
 	// Extension and Size describe the source file. A preview carries them
 	// because previews only cover ticked files, so the UI cannot recover them
 	// by indexing the (larger) visible list.
