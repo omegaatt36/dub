@@ -14,66 +14,99 @@ type Crumb struct {
 // of them.
 const maxCrumbs = 4
 
-// DirectoryBar is the row above the panes: the Open button, the controls for
-// the sidebar and a refresh, and the current path, where every ancestor is a
-// link back up. It lives inside the swapped content so it follows every change
-// of directory.
+// DirectoryBar combines branding, navigation, and theme controls in one row.
+// It lives inside the swapped content so the current path and controls follow
+// every directory change. Unoccupied space remains a Wails window drag handle.
 templ DirectoryBar(data PageData) {
-	<div class="shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3">
-		<button
-			type="button"
-			class="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500"
-			hx-post="/api/select-directory"
-			hx-target="#main-content"
-			hx-swap="innerHTML"
-			title={ "Choose a folder (" + modKey() + "O)" }
-		>
-			<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
-			Open
-		</button>
-		<button
-			type="button"
-			class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-			hx-post="/api/tree/visibility"
-			data-focus-key="toolbar:sidebar"
-			hx-vals={ jsonVals(map[string]string{"hide": strconv.FormatBool(!data.HideTree)}) }
-			hx-target="#main-content"
-			hx-swap="innerHTML"
-			title={ sidebarLabel(data.HideTree) }
-			aria-label={ sidebarLabel(data.HideTree) }
-			aria-pressed={ strconv.FormatBool(!data.HideTree) }
-		>
-			<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm5 0v14"></path></svg>
-		</button>
-		if len(data.Crumbs) > 0 {
-			@breadcrumb(data.Crumbs, data.SelectedDirectory)
+	<header
+		style="--wails-draggable: drag"
+		class="shrink-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 py-2 flex items-center gap-3"
+	>
+		<div class="flex items-center gap-2 shrink-0">
+			<img src="/static/images/logo.svg" alt="" class="w-6 h-6"/>
+			<h1 class="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-none tracking-tight">Dub</h1>
+		</div>
+		<div class="h-5 w-px bg-gray-200 dark:bg-gray-700 shrink-0" aria-hidden="true"></div>
+		<div class="flex items-center gap-2 shrink-0" style="--wails-draggable: no-drag">
 			<button
 				type="button"
-				data-copy-path={ data.SelectedDirectory }
-				data-focus-key="toolbar:copy"
-				class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-				title="Copy path"
-				aria-label="Copy path"
-			>
-				<svg data-copy-icon class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-				<svg data-copied-icon class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>
-			</button>
-			<button
-				type="button"
-				class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
-				hx-post="/api/refresh"
-				data-focus-key="toolbar:refresh"
+				class="shrink-0 bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-md text-xs font-semibold shadow-sm transition-all active:scale-95 flex items-center gap-1.5 focus-visible:ring-2 focus-visible:ring-blue-500"
+				data-focus-key="toolbar:open"
+				hx-post="/api/select-directory"
 				hx-target="#main-content"
 				hx-swap="innerHTML"
-				title={ "Refresh the folder (" + modKey() + "R)" }
-				aria-label="Refresh the folder"
+				title={ "Choose a folder (" + modKey() + "O)" }
 			>
-				<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M5.6 15A8 8 0 0019 13M18.4 9A8 8 0 005 11"></path></svg>
+				<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path></svg>
+				Open
 			</button>
-		} else {
-			<span class="text-xs text-gray-500 dark:text-gray-400 italic truncate">No folder selected</span>
-		}
-	</div>
+			<button
+				type="button"
+				class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+				hx-post="/api/tree/visibility"
+				data-focus-key="toolbar:sidebar"
+				hx-vals={ jsonVals(map[string]string{"hide": strconv.FormatBool(!data.HideTree)}) }
+				hx-target="#main-content"
+				hx-swap="innerHTML"
+				title={ sidebarLabel(data.HideTree) }
+				aria-label={ sidebarLabel(data.HideTree) }
+				aria-pressed={ strconv.FormatBool(!data.HideTree) }
+			>
+				<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 5h16a1 1 0 011 1v12a1 1 0 01-1 1H4a1 1 0 01-1-1V6a1 1 0 011-1zm5 0v14"></path></svg>
+			</button>
+		</div>
+		<div class="min-w-0 flex-1 flex items-center gap-1">
+			if len(data.Crumbs) > 0 {
+				@breadcrumb(data.Crumbs, data.SelectedDirectory)
+				<div class="flex items-center gap-1 shrink-0" style="--wails-draggable: no-drag">
+					<button
+						type="button"
+						data-copy-path={ data.SelectedDirectory }
+						data-focus-key="toolbar:copy"
+						class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+						title="Copy path"
+						aria-label="Copy path"
+					>
+						<svg data-copy-icon class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+						<svg data-copied-icon class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"></path></svg>
+					</button>
+					<button
+						type="button"
+						class="shrink-0 p-1.5 rounded-md text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+						hx-post="/api/refresh"
+						data-focus-key="toolbar:refresh"
+						hx-target="#main-content"
+						hx-swap="innerHTML"
+						title={ "Refresh the folder (" + modKey() + "R)" }
+						aria-label="Refresh the folder"
+					>
+						<svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h5M20 20v-5h-5M5.6 15A8 8 0 0019 13M18.4 9A8 8 0 005 11"></path></svg>
+					</button>
+				</div>
+			} else {
+				<span class="text-xs text-gray-500 dark:text-gray-400 italic truncate">No folder selected</span>
+			}
+		</div>
+		<div class="shrink-0" style="--wails-draggable: no-drag">
+			@themeToggle()
+		</div>
+	</header>
+}
+
+templ themeToggle() {
+	<button
+		id="theme-toggle"
+		data-focus-key="toolbar:theme"
+		type="button"
+		class="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors focus-visible:ring-2 focus-visible:ring-blue-500"
+		onclick="cycleTheme()"
+		title="Theme: System"
+		aria-label="Theme: System"
+	>
+		<svg data-theme-icon="system" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17H5a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-4m-6 0h6m-6 0l-1 3h8l-1-3m5-9v11"></path></svg>
+		<svg data-theme-icon="light" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
+		<svg data-theme-icon="dark" class="w-4 h-4 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+	</button>
 }
 
 func sidebarLabel(hidden bool) string {
@@ -93,7 +126,7 @@ func paneColumns(hideTree bool) templ.SafeCSS {
 }
 
 templ breadcrumb(crumbs []Crumb, fullPath string) {
-	<nav aria-label="Current folder" class="min-w-0 overflow-hidden" title={ fullPath }>
+	<nav style="--wails-draggable: no-drag" aria-label="Current folder" class="min-w-0 overflow-hidden" title={ fullPath }>
 		<ol class="flex items-center gap-1 text-xs font-mono text-gray-700 dark:text-gray-300 min-w-0">
 			if len(crumbs) > maxCrumbs {
 				@crumbItems(crumbs[:1], true)
