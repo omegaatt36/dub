@@ -47,6 +47,7 @@ type AppState struct {
 	LastRenameHistory []domain.RenamePreview
 	LastRenameDir     string
 	CanUndo           bool
+	RecoveryPending   bool
 	// NamesTyped records that the current names came from the manual editor. The
 	// names themselves cannot say so, and only typed names are lost for good on
 	// a directory change: a template or search rule can be re-applied, a loaded
@@ -130,6 +131,7 @@ func (s *AppState) ResetForDirectory() {
 	s.AppliedMethod = ""
 	s.LoadedNames = nil
 	s.ExtensionPolicy = port.KeepExtension
+	s.RecoveryPending = false
 }
 
 // ClearPreviews drops the preview set without touching names or the filter.

@@ -146,3 +146,22 @@ test('manual save has a stable source independent from a waiting main-content mu
  const shell=shellSource;
  assert.match(shell,/<[^>]+id="manual-save-source"[^>]+hidden/);
 });
+
+test('native drop waits for pending manual save before posting paths and target',async()=>{
+ const calls=[]; let finishSave;
+ const app=bridge({ajax(method,url,options){
+  calls.push({method,url,target:options.target});
+  if(url.startsWith('/api/names?')) return new Promise(resolve=>{finishSave=resolve;});
+  return Promise.resolve();
+ }});
+ const form={isConnected:true,dataset:{},values:[['name_0','draft']],matches(){return true;},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
+ app.emit('input',{target:{dataset:{},closest(){return form;}}});
+ const drop=app.window.dubDropFiles({paths:['/a & b','/second'],target:'scan'});
+ await Promise.resolve();
+ assert.equal(calls.length,1); assert.match(calls[0].url,/^\/api\/names\?/);
+ finishSave(); await drop;
+ assert.equal(calls.length,2);
+ assert.equal(calls[1].method,'POST');
+ assert.equal(calls[1].url,'/api/drop?path=%2Fa+%26+b&path=%2Fsecond&target=scan');
+ assert.equal(calls[1].target,'#main-content');
+});

@@ -32,23 +32,18 @@ func readFolders(scanner port.Scanner, path string) folderListing {
 // handleTreeToggle opens or closes one folder-tree node. It answers with the
 // tree alone: the file list and the naming work are untouched by browsing.
 //
-// Opening a folder is the one moment the tree reads the disk, and it does so
-// before taking the lock. Every later render reuses that listing, so ticking a
+// Opening a folder is the one moment the tree reads the disk, on the private
+// operation snapshot. Every later render reuses that listing, so ticking a
 // file or typing a name does not re-list the open folders.
 func (a *App) handleTreeToggle(w http.ResponseWriter, r *http.Request) {
 	path := r.FormValue("path")
 
-	a.mu.Lock()
 	opening := path != "" && !a.state.Expanded[path]
-	a.mu.Unlock()
 
 	var listing folderListing
 	if opening {
 		listing = readFolders(a.scanner, path)
 	}
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	if path != "" {
 		if a.state.Expanded[path] {
@@ -66,14 +61,11 @@ func (a *App) handleTreeToggle(w http.ResponseWriter, r *http.Request) {
 
 // handleTreeVisibility shows or hides the sidebar.
 func (a *App) handleTreeVisibility(w http.ResponseWriter, r *http.Request) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.state.HideTree = r.FormValue("hide") == "true"
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
-// cacheFolders remembers a directory listing. Callers hold a.mu.
+// cacheFolders remembers a directory listing on a private snapshot.
 func (a *App) cacheFolders(path string, listing folderListing) {
 	if a.folderCache == nil {
 		a.folderCache = make(map[string]folderListing)
@@ -83,10 +75,13 @@ func (a *App) cacheFolders(path string, listing folderListing) {
 
 // listFolders returns path's subfolders from the cache, reading them once if
 // they are not there yet. The listing is refreshed when the user opens the
-// folder or asks for a refresh. Callers hold a.mu.
+// folder or asks for a refresh. GET snapshots never read the filesystem.
 func (a *App) listFolders(path string) folderListing {
 	if listing, ok := a.folderCache[path]; ok {
 		return listing
+	}
+	if a.readOnly {
+		return folderListing{}
 	}
 	listing := readFolders(a.scanner, path)
 	a.cacheFolders(path, listing)
@@ -96,9 +91,6 @@ func (a *App) listFolders(path string) folderListing {
 // handleScanCancel drops a parked directory request and keeps the user where
 // they are.
 func (a *App) handleScanCancel(w http.ResponseWriter, r *http.Request) {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	a.state.PendingDir = ""
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
@@ -107,7 +99,7 @@ func (a *App) handleScanCancel(w http.ResponseWriter, r *http.Request) {
 // hand: those exist nowhere else, while a template or a search rule can be
 // re-applied. In that case the request is parked in PendingDir and the page asks
 // first. One click in the folder tree is far cheaper than the old dialog, so the
-// loss is far easier to cause. Callers hold a.mu.
+// loss is far easier to cause.
 func (a *App) requestScan(path string) {
 	if a.hasTypedNames() {
 		a.state.PendingDir = a.resolveDir(path)
@@ -159,7 +151,7 @@ func (a *App) undoDir() string {
 // revealInTree opens the chain of folders from the tree root down to path, so
 // the directory in view and its subfolders are visible. A path outside the home
 // folder becomes an extra root of the tree, unless an earlier one already covers
-// it; roots it contains are folded into it. Callers hold a.mu.
+// it; roots it contains are folded into it.
 func (a *App) revealInTree(path string) {
 	root, ok := a.treeRootFor(path)
 	if !ok {

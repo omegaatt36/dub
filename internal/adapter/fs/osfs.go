@@ -2,6 +2,7 @@ package fs
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -10,6 +11,11 @@ import (
 
 // OSFileSystem implements port.FileSystem using the real OS filesystem.
 type OSFileSystem struct{}
+
+// OpenFile lets import callers enforce a read limit before allocating the file.
+func (f *OSFileSystem) OpenFile(path string) (io.ReadCloser, error) {
+	return os.Open(path)
+}
 
 func (f *OSFileSystem) ReadDir(path string) ([]os.DirEntry, error) {
 	entries, err := os.ReadDir(path)

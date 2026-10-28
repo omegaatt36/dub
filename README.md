@@ -31,6 +31,30 @@ Or click "Cancel" on the warning, then System Settings → Privacy & Security �
 
 New names must be single filenames: paths such as `../image.jpg` or `/tmp/image.jpg` are rejected. Rename and Undo stay in the original directory, never replace files outside the batch, and stop before moving anything if the directory changed underneath them.
 
+## Rename Safety and Recovery
+
+Previews record the identity of the directory and each source entry. Execute and Undo reject a source that no longer has its recorded identity.
+These checks do not lock out other programs. Another program can still change a file between a check and a filesystem operation.
+On Linux, the filesystem must provide an entry birth time through `statx`. Dub refuses renames when this identity is unavailable.
+
+Dub uses native directory capabilities for case-sensitivity checks. If a capability is unknown, Dub uses conservative case-insensitive comparison.
+Canonically equivalent Unicode spellings count as conflicts, even on case-sensitive filesystems. These rules can reject names that the filesystem permits separately.
+
+Before a batch starts, Dub writes a recovery journal in the target directory. If the process stops during a rename, the journal remains.
+
+1. Open the affected folder in Dub.
+2. Expand **Review recovery**.
+3. Read the recovery notice.
+4. Select **Restore original names**.
+
+Recovery restores the original names and clears the current naming draft and previews. It stops if file identities or destinations are unsafe.
+Keep the journal and temporary files until recovery is complete. Do not rename or delete them manually.
+
+The journal supports recovery after a process interruption. It is not a backup or a guarantee against power loss, disk damage, or external file changes.
+Undo records the last successful batch for the current application session only. It does not survive an application restart.
+
+## Keyboard Shortcuts
+
 | Shortcut | Action |
 |---|---|
 | `⌘O` / `Ctrl+O` | Open a folder |
@@ -64,6 +88,9 @@ Add a format after a colon: `{index:3}` gives `001`, and `{date:20060102}` uses 
 
 **From File** loads names from a `.txt` or `.csv` file with one name per line: click the drop zone or drag the file onto it. **Manual** lets you type each new name beside its file.
 
+Name lists have a 4 MiB content limit, a 4,096-byte line limit, and a limit of 100,000 nonempty names.
+If an import exceeds a limit or cannot be read completely, Dub keeps the previous names.
+
 ## Filtering
 
 The filter box takes a Go regular expression, matched against the filename without its extension. These shortcuts expand before the pattern compiles:
@@ -92,6 +119,10 @@ task check    # go vet, golangci-lint, govulncheck
 You need [Go](https://go.dev/dl/) 1.27+, [Task](https://taskfile.dev/), the [Wails v3](https://v3.wails.io/getting-started/installation/) CLI (`wails3`), and the Tailwind CSS standalone CLI at `./tailwindcss` in the repository root. Templ, golangci-lint, and govulncheck come from `go.mod`.
 
 `go build ./...` and `go test ./...` also work on a fresh clone, since the generated CSS and vendored htmx are committed. There is no `wails3 dev`: dub has no bundler to proxy to, so `task dev` runs the watchers and the app directly. Wails build settings live in `build/config.yml`; run `wails3 task common:update:build-assets` after changing the app metadata.
+
+Real-browser smoke tests use the application handlers, the committed frontend assets, and temporary files.
+See [the browser test guide](web/tests/browser/README.md) for commands and the separate native WebView checklist.
+Browser tests do not verify the native directory picker, native file-drop delivery, or platform IME behavior.
 
 ## License
 

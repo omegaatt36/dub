@@ -1,261 +1,229 @@
 package service
 
 import (
-	"crypto/rand"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
+
 	"github.com/omegaatt36/dub/internal/domain"
 	"github.com/omegaatt36/dub/internal/port"
 )
 
-// RenamerService handles rename previewing and execution.
-type RenamerService struct {
-	fs port.FileSystem
-}
+type RenamerService struct{ fs port.FileSystem }
 
 func NewRenamerService(fs port.FileSystem) *RenamerService {
 	return &RenamerService{fs: fs}
 }
 
-// validateFileName rejects names that cannot exist on disk or would escape the
-// target directory. Extension characters are included so a proposed name cannot
-// smuggle a path separator past the join.
 func validateFileName(name string) error {
-	if name == "" {
-		return domain.ErrInvalidFileName
-	}
-	if (name == "." || name == "..") ||
-		strings.ContainsAny(name, `/\`) ||
-		strings.ContainsRune(name, 0) {
+	if name == "" || name == "." || name == ".." ||
+		domain.IsRenameInternal(name) ||
+		strings.ContainsAny(name, "/\\\x00") {
 		return domain.ErrInvalidFileName
 	}
 	return nil
 }
 
-// PreviewRename generates rename previews for the given files and new names,
-// applying policy to decide each resulting extension, and flags conflicts.
+func nameKey(name string, sensitive bool) string {
+	if sensitive {
+		// Canonical equivalents are conservatively rejected even on systems
+		// that permit both spellings, including case-sensitive Linux.
+		return norm.NFC.String(name)
+	}
+	// Conservative alias screening, not an emulation of filesystem lookup.
+	return norm.NFC.String(cases.Fold().String(norm.NFD.String(name)))
+}
+
 func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []string, policy port.ExtensionPolicy) ([]domain.RenamePreview, error) {
 	if len(files) != len(newNames) {
 		return nil, domain.ErrMismatchedNames
 	}
-
 	previews := make([]domain.RenamePreview, len(files))
 	for i, f := range files {
-		newName := strings.TrimSpace(newNames[i])
+		name := strings.TrimSpace(newNames[i])
 		switch {
-		case newName == "":
-			newName = f.Name
-		case policy == port.KeepExtension && f.Extension != "" && !strings.HasSuffix(strings.ToLower(newName), strings.ToLower(f.Extension)):
-			newName = newName + f.Extension
+		case name == "":
+			name = f.Name
+		case policy == port.KeepExtension && f.Extension != "" && !strings.HasSuffix(strings.ToLower(name), strings.ToLower(f.Extension)):
+			name += f.Extension
 		}
-
-		if err := validateFileName(f.Name); err != nil {
-			return nil, err
-		}
-		{
-			if err := validateFileName(newName); err != nil {
-				return nil, fmt.Errorf("invalid name %q: %w", newName, domain.ErrInvalidFileName)
-			}
-		}
-
-		dir := filepath.Dir(f.Path)
 		previews[i] = domain.RenamePreview{
-			Extension:    f.Extension,
-			Size:         f.Size,
-			OriginalName: f.Name,
-			NewName:      newName,
-			OriginalPath: f.Path,
-			NewPath:      filepath.Join(dir, newName),
+			Extension: f.Extension, Size: f.Size, OriginalName: f.Name, NewName: name,
+			OriginalPath: f.Path, NewPath: filepath.Join(filepath.Dir(f.Path), name),
 		}
 	}
-
-	previewDir := ""
-	for _, p := range previews {
-		dir, err := validatePreviews([]domain.RenamePreview{p})
-		if err != nil {
-			return nil, err
-		}
-		if previewDir != "" && dir != previewDir {
-			return nil, domain.ErrInvalidPath
-		}
-		previewDir = dir
+	dir, err := validatePaths(previews)
+	if err != nil {
+		return nil, err
 	}
-
-	// Two-pass conflict detection: mark ALL duplicates (not just second occurrence)
-	nameCount := make(map[string]int)
-	for _, p := range previews {
-		nameCount[strings.ToLower(p.NewName)]++
-	}
-	for i := range previews {
-		if nameCount[strings.ToLower(previews[i].NewName)] > 1 {
-			previews[i].Conflict = true
-		}
-	}
-
-	if s.fs != nil && len(previews) > 0 {
-		var entries []os.DirEntry
+	sensitive := false
+	var directory port.RenameDirectory
+	var entries []os.DirEntry
+	if len(previews) > 0 && s.fs != nil {
 		if opener, ok := s.fs.(port.RenameDirectoryOpener); ok {
-			session, err := opener.OpenRenameDirectory(previewDir)
+			d, err := opener.OpenRenameDirectory(dir)
 			if err != nil {
 				return nil, err
 			}
-			defer session.Close()
-			identity, err := session.Identity()
-			if err != nil {
-				return nil, err
-			}
-			if identity == "" {
-				return nil, fmt.Errorf("empty directory identity")
-			}
-			entries, err = session.ReadDir()
-			if err != nil {
-				return nil, err
+			defer d.Close()
+			directory = d
+			id, err := d.Identity()
+			if err != nil || id == "" {
+				return nil, fmt.Errorf("cannot identify directory: %v", err)
 			}
 			for i := range previews {
-				previews[i].DirectoryID = identity
+				previews[i].DirectoryID = id
+				previews[i].SourceID, err = d.EntryIdentity(previews[i].OriginalName)
+				if err != nil {
+					return nil, err
+				}
+			}
+			value, known := d.CaseSensitive()
+			sensitive = value && known
+			entries, err = d.ReadDir()
+			if err != nil {
+				return nil, err
 			}
 		} else {
-			var err error
-			entries, err = s.fs.ReadDir(previewDir)
+			entries, err = s.fs.ReadDir(dir)
 			if err != nil {
 				return nil, err
 			}
 		}
-		selected := map[string]bool{}
-		for _, p := range previews {
-			selected[strings.ToLower(p.OriginalName)] = true
-		}
-		occupied := map[string]bool{}
-		for _, e := range entries {
-			occupied[strings.ToLower(e.Name())] = true
-		}
-		for i, p := range previews {
-			if occupied[strings.ToLower(p.NewName)] && !selected[strings.ToLower(p.NewName)] {
-				previews[i].Conflict = true
+	}
+	counts, selected, occupied := map[string]int{}, map[string]bool{}, map[string]bool{}
+	for _, p := range previews {
+		counts[nameKey(p.NewName, sensitive)]++
+		selected[nameKey(p.OriginalName, sensitive)] = true
+	}
+	for _, e := range entries {
+		occupied[nameKey(e.Name(), sensitive)] = true
+	}
+	for i, p := range previews {
+		key := nameKey(p.NewName, sensitive)
+		previews[i].Conflict = counts[key] > 1 || (occupied[key] && !selected[key])
+		if directory != nil {
+			id, lookupErr := directory.EntryIdentity(p.NewName)
+			if lookupErr == nil {
+				owned := false
+				for _, source := range previews {
+					owned = owned || source.SourceID == id
+				}
+				previews[i].Conflict = previews[i].Conflict || !owned
+			} else if !os.IsNotExist(lookupErr) {
+				return nil, lookupErr
 			}
 		}
-	}
-
-	// Compute diffs for changed files
-	for i := range previews {
-		if previews[i].OriginalName != previews[i].NewName {
-			previews[i].OriginalDiff, previews[i].NewDiff = domain.ComputeDiff(
-				previews[i].OriginalName, previews[i].NewName,
-			)
+		if p.OriginalName != p.NewName {
+			previews[i].OriginalDiff, previews[i].NewDiff = domain.ComputeDiff(p.OriginalName, p.NewName)
 		}
 	}
-
 	return previews, nil
 }
 
-func validatePreviews(previews []domain.RenamePreview) (string, error) {
+func validatePaths(previews []domain.RenamePreview) (string, error) {
 	dir := ""
-	sources, targets := map[string]bool{}, map[string]bool{}
 	for _, p := range previews {
 		if validateFileName(p.OriginalName) != nil || validateFileName(p.NewName) != nil {
 			return "", domain.ErrInvalidFileName
 		}
 		d := filepath.Dir(p.OriginalPath)
-		if !filepath.IsAbs(p.OriginalPath) || filepath.Clean(p.OriginalPath) != p.OriginalPath || p.OriginalPath != filepath.Join(d, p.OriginalName) || p.NewPath != filepath.Join(d, p.NewName) {
-			return "", domain.ErrInvalidPath
-		}
-		if dir != "" && dir != d {
+		if !filepath.IsAbs(p.OriginalPath) || filepath.Clean(p.OriginalPath) != p.OriginalPath ||
+			p.OriginalPath != filepath.Join(d, p.OriginalName) || p.NewPath != filepath.Join(d, p.NewName) ||
+			(dir != "" && dir != d) {
 			return "", domain.ErrInvalidPath
 		}
 		dir = d
-		source, target := strings.ToLower(p.OriginalName), strings.ToLower(p.NewName)
-		if sources[source] || targets[target] || p.Conflict {
-			return "", fmt.Errorf("conflicting rename: %q", p.NewName)
-		}
-		sources[source] = true
-		targets[target] = true
 	}
 	return dir, nil
 }
 
+func renameFailure(err error) domain.RenameResult {
+	return domain.RenameResult{Message: err.Error(), Errors: []string{err.Error()}}
+}
+
 func (s *RenamerService) ExecuteRename(previews []domain.RenamePreview) domain.RenameResult {
-	fail := func(err error) domain.RenameResult {
-		return domain.RenameResult{Message: err.Error(), Errors: []string{err.Error()}}
-	}
-	dir, err := validatePreviews(previews)
+	dir, err := validatePaths(previews)
 	if err != nil {
-		return fail(err)
+		return renameFailure(err)
 	}
 	if len(previews) == 0 {
 		return domain.RenameResult{Success: true, Message: "Successfully renamed 0 files"}
 	}
+	d, err := s.openLocked(dir)
+	if err != nil {
+		return renameFailure(err)
+	}
+	defer d.Close()
+	if _, err := d.ReadJournal(); !os.IsNotExist(err) {
+		return renameFailure(fmt.Errorf("pending or unreadable rename journal; run recovery before renaming"))
+	}
+	id, err := d.Identity()
+	if err != nil {
+		return renameFailure(err)
+	}
+	value, known := d.CaseSensitive()
+	sensitive := value && known
+	sources, targets, ids := map[string]bool{}, map[string]bool{}, map[string]bool{}
+	for _, p := range previews {
+		source, target := nameKey(p.OriginalName, sensitive), nameKey(p.NewName, sensitive)
+		if p.Conflict || sources[source] || targets[target] || p.DirectoryID == "" || p.DirectoryID != id || p.SourceID == "" || ids[p.SourceID] {
+			return renameFailure(fmt.Errorf("conflicting or stale preview; generate a new preview"))
+		}
+		sources[source], targets[target], ids[p.SourceID] = true, true, true
+		if err := verifyEntry(d, p.OriginalName, p.SourceID); err != nil {
+			return renameFailure(err)
+		}
+	}
+	entries, err := d.ReadDir()
+	if err != nil {
+		return renameFailure(err)
+	}
+	for _, e := range entries {
+		key := nameKey(e.Name(), sensitive)
+		if targets[key] && !sources[key] {
+			return renameFailure(fmt.Errorf("target already exists: %q", e.Name()))
+		}
+	}
+	for _, p := range previews {
+		targetID, err := d.EntryIdentity(p.NewName)
+		if err == nil && !ids[targetID] {
+			return renameFailure(fmt.Errorf("target already exists: %q", p.NewName))
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return renameFailure(err)
+		}
+	}
+	return executeJournal(d, id, previews)
+}
+
+func (s *RenamerService) openLocked(dir string) (port.RenameDirectory, error) {
 	opener, ok := s.fs.(port.RenameDirectoryOpener)
 	if !ok {
-		return fail(fmt.Errorf("filesystem does not support safe rename sessions"))
+		return nil, fmt.Errorf("filesystem does not support safe rename sessions")
 	}
-	session, err := opener.OpenRenameDirectory(dir)
+	d, err := opener.OpenRenameDirectory(dir)
 	if err != nil {
-		return fail(err)
+		return nil, err
 	}
-	defer session.Close()
-	identity, err := session.Identity()
+	if err := d.Lock(); err != nil {
+		d.Close()
+		return nil, fmt.Errorf("another rename or recovery is active: %w", err)
+	}
+	return d, nil
+}
+
+func verifyEntry(d port.RenameDirectory, name, want string) error {
+	id, err := d.EntryIdentity(name)
 	if err != nil {
-		return fail(err)
+		return fmt.Errorf("identify %q: %w", name, err)
 	}
-	for _, p := range previews {
-		if p.DirectoryID == "" || p.DirectoryID != identity {
-			return fail(fmt.Errorf("directory changed since preview; generate a new preview"))
-		}
+	if id != want || want == "" {
+		return fmt.Errorf("source entry %q changed; refusing rename", name)
 	}
-	entries, err := session.ReadDir()
-	if err != nil {
-		return fail(err)
-	}
-	occupied := map[string]bool{}
-	for _, e := range entries {
-		occupied[strings.ToLower(e.Name())] = true
-	}
-	selected := map[string]bool{}
-	for _, p := range previews {
-		selected[strings.ToLower(p.OriginalName)] = true
-	}
-	var changes []domain.RenamePreview
-	for _, p := range previews {
-		if !occupied[strings.ToLower(p.OriginalName)] {
-			return fail(fmt.Errorf("source missing: %q", p.OriginalName))
-		}
-		if occupied[strings.ToLower(p.NewName)] && !selected[strings.ToLower(p.NewName)] {
-			return fail(fmt.Errorf("target already exists: %q", p.NewName))
-		}
-		if p.OriginalName != p.NewName {
-			changes = append(changes, p)
-		}
-	}
-	type move struct{ from, to string }
-	var moves []move
-	rollback := func(cause error) domain.RenameResult {
-		result := fail(cause)
-		result.RolledBack = true
-		for i := len(moves) - 1; i >= 0; i-- {
-			m := moves[i]
-			if err := session.Rename(m.to, m.from); err != nil {
-				result.RollbackErrors = append(result.RollbackErrors, fmt.Sprintf("restore %q from %q: %v", m.from, m.to, err))
-			}
-		}
-		return result
-	}
-	temps := make([]string, len(changes))
-	for i, p := range changes {
-		temporary := ".dub-rename-" + rand.Text()
-		temps[i] = temporary
-		if err := session.Rename(p.OriginalName, temporary); err != nil {
-			return rollback(fmt.Errorf("stage %q: %w", p.OriginalName, err))
-		}
-		moves = append(moves, move{p.OriginalName, temporary})
-	}
-	for i, p := range changes {
-		if err := session.Rename(temps[i], p.NewName); err != nil {
-			return rollback(fmt.Errorf("rename %q: %w", p.OriginalName, err))
-		}
-		moves = append(moves, move{temps[i], p.NewName})
-	}
-	return domain.RenameResult{Success: true, RenamedCount: len(changes), Message: fmt.Sprintf("Successfully renamed %d files", len(changes))}
+	return nil
 }

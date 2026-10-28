@@ -58,6 +58,9 @@ type PageData struct {
 	ReplacePattern string
 	Result         *domain.RenameResult
 	CanUndo        bool
+	// RecoveryPending blocks new renames until the user resolves a journal
+	// left by an interrupted operation in the selected directory.
+	RecoveryPending bool
 }
 
 // AppContent renders the app UI without the HTML shell.
@@ -79,6 +82,7 @@ templ MainContent(data PageData) {
 	<div data-file-drop-target="scan" class="h-full flex flex-col min-h-0">
 		@DirectoryBar(data)
 		@DiscardPrompt(data.PendingDir)
+		@RecoveryPrompt(data.RecoveryPending)
 		<div class="flex-1 min-h-0 grid gap-4 p-4 overflow-hidden" style={ paneColumns(data.HideTree) }>
 			<!-- Left column: folder tree -->
 			if !data.HideTree {

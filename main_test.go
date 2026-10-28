@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"io"
 	"io/fs"
 	"net/http"
@@ -15,6 +16,25 @@ import (
 	"github.com/omegaatt36/dub/internal/adapter/regex"
 	"github.com/omegaatt36/dub/internal/service"
 )
+
+func TestNativeDropScriptEncodesPathsAsData(t *testing.T) {
+	paths := []string{"/tmp/a'\"\\\n.jpg", "/tmp/</script><script>alert(1)</script>.txt"}
+	script := nativeDropScript(paths, app.DropTargetNames)
+	payload := strings.TrimSuffix(strings.TrimPrefix(script, "window.dubDropFiles("), ")")
+	var decoded struct {
+		Paths  []string `json:"paths"`
+		Target string   `json:"target"`
+	}
+	if err := json.Unmarshal([]byte(payload), &decoded); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.Paths) != len(paths) || decoded.Paths[0] != paths[0] || decoded.Paths[1] != paths[1] || decoded.Target != app.DropTargetNames {
+		t.Fatalf("drop payload did not round trip: %#v", decoded)
+	}
+	if strings.Contains(script, "</script>") {
+		t.Fatal("script-like filenames must remain escaped data")
+	}
+}
 
 // newTestAssetHandler builds the same handler main.go hands to Wails: the
 // embedded assets at the root, the application's HTMX API under /api/. Running

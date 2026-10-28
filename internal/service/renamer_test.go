@@ -514,6 +514,8 @@ func bindDirectoryIdentity(t *testing.T, dir string, rows []domain.RenamePreview
 	require.NoError(t, err)
 	for i := range rows {
 		rows[i].DirectoryID = id
+		rows[i].SourceID, err = session.EntryIdentity(rows[i].OriginalName)
+		require.NoError(t, err)
 	}
 }
 

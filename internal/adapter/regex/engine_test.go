@@ -33,7 +33,7 @@ func TestEngine_ExpandShortcuts(t *testing.T) {
 	}
 }
 
-func TestEngine_Match(t *testing.T) {
+func TestEngine_Compile(t *testing.T) {
 	e := &Engine{}
 
 	tests := []struct {
@@ -54,14 +54,15 @@ func TestEngine_Match(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			matched, err := e.Match(tt.pattern, tt.input)
+			match, err := e.Compile(tt.pattern)
 			if tt.wantErr {
 				require.Error(t, err)
 				assert.ErrorIs(t, err, domain.ErrInvalidPattern)
+				assert.Nil(t, match)
 				return
 			}
 			require.NoError(t, err)
-			assert.Equal(t, tt.matched, matched)
+			assert.Equal(t, tt.matched, match(tt.input))
 		})
 	}
 }

@@ -28,10 +28,10 @@ func (e *Engine) ExpandShortcuts(pattern string) string {
 	return result
 }
 
-func (e *Engine) Match(pattern, name string) (bool, error) {
+func (e *Engine) Compile(pattern string) (func(string) bool, error) {
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		return false, fmt.Errorf("%w: %s", domain.ErrInvalidPattern, err)
+		return nil, fmt.Errorf("%w: %s", domain.ErrInvalidPattern, err)
 	}
-	return re.MatchString(name), nil
+	return re.MatchString, nil
 }

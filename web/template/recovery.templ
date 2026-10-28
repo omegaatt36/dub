@@ -1,0 +1,24 @@
+package template
+
+// Recovery is explicit: opening a directory must never rename files on its own.
+templ RecoveryPrompt(pending bool) {
+	if pending {
+		<div class="shrink-0 px-4 py-3 border-b border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100" role="alert">
+			<p class="text-sm font-semibold">An interrupted rename needs recovery.</p>
+			<p class="text-xs mt-1">New renames are blocked in this folder. Keep its journal and temporary files until recovery is complete.</p>
+			<details class="mt-2 text-sm">
+				<summary class="cursor-pointer font-medium">Review recovery</summary>
+				<p class="text-xs mt-2">Recovery restores the original names. It clears the current naming draft and previews. It stops if file identities or destinations are unsafe.</p>
+				<button
+					type="button"
+					class="mt-2 bg-amber-700 hover:bg-amber-600 text-white px-3 py-1.5 rounded-md text-sm font-medium focus-visible:ring-2 focus-visible:ring-amber-500"
+					hx-post="/api/recover"
+					hx-target="#main-content"
+					hx-swap="innerHTML"
+				>
+					Restore original names
+				</button>
+			</details>
+		</div>
+	}
+}

@@ -6,7 +6,11 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +22,13 @@ jobs:
 
       - name: Install Task
         uses: go-task/setup-task@v1
+        with:
+          version: '3.44.1'
 
       # Wails dependencies are required on Linux to compile/test packages
       # that might interact with the frontend runtime
       - name: Install Linux dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev libjavascriptcoregtk-6.0-dev
@@ -32,10 +39,47 @@ jobs:
       # The generated *_templ.go files are committed. A stale one compiles and
       # passes tests while rendering yesterday's template.
       - name: Check generated code is up to date
-        run: git diff --exit-code -- web/template
+        run: |
+          changes=$(git status --porcelain --untracked-files=all -- ':(glob)**/*_templ.go' web/static/css/app.css web/static/js/htmx.min.js)
+          if [ -n "$changes" ]; then
+            printf '%s\n' "$changes"
+            exit 1
+          fi
+
+      - name: Vet, lint, and vulnerability checks
+        run: task check
 
       - name: Build
         run: go build ./...
 
       - name: Run Tests
         run: task test
+
+  browser:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/tests/browser/package-lock.json
+      - name: Check opt-in browser host
+        run: |
+          go vet -all -tags browser ./cmd/browserhost
+          go tool golangci-lint run --build-tags browser ./cmd/browserhost/...
+          go test -race -tags browser ./cmd/browserhost
+      - run: npm ci
+        working-directory: web/tests/browser
+      - run: npx playwright install --with-deps chromium
+        working-directory: web/tests/browser
+      - run: npm test
+        working-directory: web/tests/browser
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-results
+          path: web/tests/browser/test-results
