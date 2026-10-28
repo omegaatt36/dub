@@ -48,6 +48,9 @@ const (
 
 // App is the main application struct that composes all services.
 type App struct {
+	// operations orders HTTP mutations and native drops. mu protects only the
+	// published snapshot; filesystem work and rendering use a private copy.
+	operations    sync.Mutex
 	mu            sync.Mutex
 	fs            port.FileSystem
 	scanner       port.Scanner
@@ -59,6 +62,8 @@ type App struct {
 	logger        *slog.Logger
 	// folderCache holds the folder tree's directory listings. See listFolders.
 	folderCache map[string]folderListing
+	// readOnly snapshots never discover folders while rendering a GET.
+	readOnly bool
 }
 
 // NewApp creates a new App with injected service dependencies.
@@ -79,7 +84,19 @@ func NewApp(fs port.FileSystem, scanner port.Scanner, pattern port.PatternFilter
 
 // GetHandler returns the HTTP handler for the HTMX API.
 func (a *App) GetHandler() http.Handler {
-	return a.newRouter()
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mutation := r.Method != http.MethodGet && r.Method != http.MethodHead
+		if mutation {
+			a.operations.Lock()
+			defer a.operations.Unlock()
+		}
+		work := a.snapshot()
+		work.readOnly = !mutation
+		work.newRouter().ServeHTTP(w, r)
+		if mutation {
+			a.publish(work)
+		}
+	})
 }
 
 // OpenDirectoryDialog opens a native OS directory picker and returns the selected path.
@@ -94,13 +111,20 @@ func (a *App) OpenDirectoryDialog() (string, error) {
 // dropped on decides the action: a .txt or .csv on the names editor replaces
 // the manual name list, anywhere else scans the dropped path's directory.
 func (a *App) DropFiles(paths []string, dropTarget string) {
+	a.operations.Lock()
+	defer a.operations.Unlock()
+	work := a.snapshot()
+	work.dropFiles(paths, dropTarget)
+	// Warm newly revealed nodes before publication; GET only uses cached IO.
+	work.folderRoots()
+	a.publish(work)
+}
+
+func (a *App) dropFiles(paths []string, dropTarget string) {
 	if len(paths) == 0 {
 		return
 	}
 	path := paths[0]
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
 
 	if dropTarget == DropTargetNames && isNamesFile(path) {
 		a.loadNamesPath(path)

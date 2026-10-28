@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,10 +35,9 @@ func TestPatternService_MatchFiles(t *testing.T) {
 		mockPM := mock.NewMockPatternMatcher(ctrl)
 
 		mockPM.EXPECT().ExpandShortcuts("file_").Return("file_")
-		mockPM.EXPECT().Match("file_", "file_001").Return(true, nil)
-		mockPM.EXPECT().Match("file_", "file_002").Return(true, nil)
-		mockPM.EXPECT().Match("file_", "photo_001").Return(false, nil)
-		mockPM.EXPECT().Match("file_", "document").Return(false, nil)
+		mockPM.EXPECT().Compile("file_").Return(func(name string) bool {
+			return strings.HasPrefix(name, "file_")
+		}, nil).Times(1)
 
 		svc := NewPatternService(mockPM)
 		result, err := svc.MatchFiles(files, "file_")
@@ -55,11 +55,16 @@ func TestPatternService_MatchFiles(t *testing.T) {
 		}
 
 		mockPM.EXPECT().ExpandShortcuts("test").Return("test")
-		mockPM.EXPECT().Match("test", "hello").Return(true, nil)
-		mockPM.EXPECT().Match("test", "55688").Return(true, nil)
+		var stems []string
+		mockPM.EXPECT().Compile("test").Return(func(name string) bool {
+			stems = append(stems, name)
+			return true
+		}, nil)
 
 		svc := NewPatternService(mockPM)
-		_, _ = svc.MatchFiles(testFiles, "test")
+		_, err := svc.MatchFiles(testFiles, "test")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"hello", "55688"}, stems)
 	})
 
 	t.Run("expands shortcuts before matching", func(t *testing.T) {
@@ -67,22 +72,32 @@ func TestPatternService_MatchFiles(t *testing.T) {
 		mockPM := mock.NewMockPatternMatcher(ctrl)
 
 		mockPM.EXPECT().ExpandShortcuts("[serial]").Return("expanded_[serial]")
-		mockPM.EXPECT().Match("expanded_[serial]", gomock.Any()).Return(true, nil).Times(4)
+		mockPM.EXPECT().Compile("expanded_[serial]").Return(func(string) bool { return true }, nil)
 
 		svc := NewPatternService(mockPM)
 		_, err := svc.MatchFiles(files, "[serial]")
 		require.NoError(t, err)
 	})
 
-	t.Run("returns error on match failure", func(t *testing.T) {
+	t.Run("returns error on compile failure", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		mockPM := mock.NewMockPatternMatcher(ctrl)
 
 		mockPM.EXPECT().ExpandShortcuts("bad_pattern").Return("bad_pattern")
-		mockPM.EXPECT().Match("bad_pattern", gomock.Any()).Return(false, domain.ErrInvalidPattern)
+		mockPM.EXPECT().Compile("bad_pattern").Return(nil, domain.ErrInvalidPattern)
 
 		svc := NewPatternService(mockPM)
 		_, err := svc.MatchFiles(files, "bad_pattern")
 		require.Error(t, err)
+	})
+
+	t.Run("validates pattern even without files", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		mockPM := mock.NewMockPatternMatcher(ctrl)
+		mockPM.EXPECT().ExpandShortcuts("[").Return("[")
+		mockPM.EXPECT().Compile("[").Return(nil, domain.ErrInvalidPattern)
+
+		_, err := NewPatternService(mockPM).MatchFiles(nil, "[")
+		require.ErrorIs(t, err, domain.ErrInvalidPattern)
 	})
 }

@@ -125,6 +125,21 @@ func (m *MockPatternMatcher) EXPECT() *MockPatternMatcherMockRecorder {
 	return m.recorder
 }
 
+// Compile mocks base method.
+func (m *MockPatternMatcher) Compile(pattern string) (func(string) bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Compile", pattern)
+	ret0, _ := ret[0].(func(string) bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Compile indicates an expected call of Compile.
+func (mr *MockPatternMatcherMockRecorder) Compile(pattern any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Compile", reflect.TypeOf((*MockPatternMatcher)(nil).Compile), pattern)
+}
+
 // ExpandShortcuts mocks base method.
 func (m *MockPatternMatcher) ExpandShortcuts(pattern string) string {
 	m.ctrl.T.Helper()
@@ -137,21 +152,6 @@ func (m *MockPatternMatcher) ExpandShortcuts(pattern string) string {
 func (mr *MockPatternMatcherMockRecorder) ExpandShortcuts(pattern any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExpandShortcuts", reflect.TypeOf((*MockPatternMatcher)(nil).ExpandShortcuts), pattern)
-}
-
-// Match mocks base method.
-func (m *MockPatternMatcher) Match(pattern, name string) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Match", pattern, name)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Match indicates an expected call of Match.
-func (mr *MockPatternMatcherMockRecorder) Match(pattern, name any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Match", reflect.TypeOf((*MockPatternMatcher)(nil).Match), pattern, name)
 }
 
 // MockScanner is a mock of Scanner interface.
@@ -298,4 +298,212 @@ func (m *MockRenamer) PreviewRename(files []domain.FileItem, newNames []string, 
 func (mr *MockRenamerMockRecorder) PreviewRename(files, newNames, policy any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PreviewRename", reflect.TypeOf((*MockRenamer)(nil).PreviewRename), files, newNames, policy)
+}
+
+// MockRenameDirectory is a mock of RenameDirectory interface.
+type MockRenameDirectory struct {
+	ctrl     *gomock.Controller
+	recorder *MockRenameDirectoryMockRecorder
+	isgomock struct{}
+}
+
+// MockRenameDirectoryMockRecorder is the mock recorder for MockRenameDirectory.
+type MockRenameDirectoryMockRecorder struct {
+	mock *MockRenameDirectory
+}
+
+// NewMockRenameDirectory creates a new mock instance.
+func NewMockRenameDirectory(ctrl *gomock.Controller) *MockRenameDirectory {
+	mock := &MockRenameDirectory{ctrl: ctrl}
+	mock.recorder = &MockRenameDirectoryMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRenameDirectory) EXPECT() *MockRenameDirectoryMockRecorder {
+	return m.recorder
+}
+
+// CaseSensitive mocks base method.
+func (m *MockRenameDirectory) CaseSensitive() (bool, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CaseSensitive")
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// CaseSensitive indicates an expected call of CaseSensitive.
+func (mr *MockRenameDirectoryMockRecorder) CaseSensitive() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CaseSensitive", reflect.TypeOf((*MockRenameDirectory)(nil).CaseSensitive))
+}
+
+// Close mocks base method.
+func (m *MockRenameDirectory) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockRenameDirectoryMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockRenameDirectory)(nil).Close))
+}
+
+// CreateJournal mocks base method.
+func (m *MockRenameDirectory) CreateJournal(data []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateJournal", data)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// CreateJournal indicates an expected call of CreateJournal.
+func (mr *MockRenameDirectoryMockRecorder) CreateJournal(data any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateJournal", reflect.TypeOf((*MockRenameDirectory)(nil).CreateJournal), data)
+}
+
+// EntryIdentity mocks base method.
+func (m *MockRenameDirectory) EntryIdentity(name string) (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "EntryIdentity", name)
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// EntryIdentity indicates an expected call of EntryIdentity.
+func (mr *MockRenameDirectoryMockRecorder) EntryIdentity(name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EntryIdentity", reflect.TypeOf((*MockRenameDirectory)(nil).EntryIdentity), name)
+}
+
+// Identity mocks base method.
+func (m *MockRenameDirectory) Identity() (string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Identity")
+	ret0, _ := ret[0].(string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Identity indicates an expected call of Identity.
+func (mr *MockRenameDirectoryMockRecorder) Identity() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Identity", reflect.TypeOf((*MockRenameDirectory)(nil).Identity))
+}
+
+// Lock mocks base method.
+func (m *MockRenameDirectory) Lock() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Lock")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Lock indicates an expected call of Lock.
+func (mr *MockRenameDirectoryMockRecorder) Lock() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Lock", reflect.TypeOf((*MockRenameDirectory)(nil).Lock))
+}
+
+// ReadDir mocks base method.
+func (m *MockRenameDirectory) ReadDir() ([]os.DirEntry, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadDir")
+	ret0, _ := ret[0].([]os.DirEntry)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadDir indicates an expected call of ReadDir.
+func (mr *MockRenameDirectoryMockRecorder) ReadDir() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadDir", reflect.TypeOf((*MockRenameDirectory)(nil).ReadDir))
+}
+
+// ReadJournal mocks base method.
+func (m *MockRenameDirectory) ReadJournal() ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ReadJournal")
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ReadJournal indicates an expected call of ReadJournal.
+func (mr *MockRenameDirectoryMockRecorder) ReadJournal() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadJournal", reflect.TypeOf((*MockRenameDirectory)(nil).ReadJournal))
+}
+
+// RemoveJournal mocks base method.
+func (m *MockRenameDirectory) RemoveJournal() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveJournal")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveJournal indicates an expected call of RemoveJournal.
+func (mr *MockRenameDirectoryMockRecorder) RemoveJournal() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveJournal", reflect.TypeOf((*MockRenameDirectory)(nil).RemoveJournal))
+}
+
+// Rename mocks base method.
+func (m *MockRenameDirectory) Rename(oldName, newName string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Rename", oldName, newName)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Rename indicates an expected call of Rename.
+func (mr *MockRenameDirectoryMockRecorder) Rename(oldName, newName any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rename", reflect.TypeOf((*MockRenameDirectory)(nil).Rename), oldName, newName)
+}
+
+// MockRenameDirectoryOpener is a mock of RenameDirectoryOpener interface.
+type MockRenameDirectoryOpener struct {
+	ctrl     *gomock.Controller
+	recorder *MockRenameDirectoryOpenerMockRecorder
+	isgomock struct{}
+}
+
+// MockRenameDirectoryOpenerMockRecorder is the mock recorder for MockRenameDirectoryOpener.
+type MockRenameDirectoryOpenerMockRecorder struct {
+	mock *MockRenameDirectoryOpener
+}
+
+// NewMockRenameDirectoryOpener creates a new mock instance.
+func NewMockRenameDirectoryOpener(ctrl *gomock.Controller) *MockRenameDirectoryOpener {
+	mock := &MockRenameDirectoryOpener{ctrl: ctrl}
+	mock.recorder = &MockRenameDirectoryOpenerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockRenameDirectoryOpener) EXPECT() *MockRenameDirectoryOpenerMockRecorder {
+	return m.recorder
+}
+
+// OpenRenameDirectory mocks base method.
+func (m *MockRenameDirectoryOpener) OpenRenameDirectory(path string) (port.RenameDirectory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "OpenRenameDirectory", path)
+	ret0, _ := ret[0].(port.RenameDirectory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// OpenRenameDirectory indicates an expected call of OpenRenameDirectory.
+func (mr *MockRenameDirectoryOpenerMockRecorder) OpenRenameDirectory(path any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OpenRenameDirectory", reflect.TypeOf((*MockRenameDirectoryOpener)(nil).OpenRenameDirectory), path)
 }

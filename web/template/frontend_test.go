@@ -89,3 +89,35 @@ func TestOptionalCheckboxesUseNativeBooleanState(t *testing.T) {
 		}
 	}
 }
+
+func TestRecoveryRequiresExplicitActionAndBlocksExecution(t *testing.T) {
+	html := renderFrontend(t, MainContent(PageData{
+		RecoveryPending: true,
+		Previews:        []domain.RenamePreview{{OriginalName: "a", NewName: "b"}},
+	}))
+	if !strings.Contains(html, `hx-post="/api/recover"`) || !strings.Contains(html, "Review recovery") {
+		t.Error("pending recovery must offer a discoverable explicit action")
+	}
+	if strings.Contains(html, `hx-post="/api/execute"`) {
+		t.Error("pending recovery must not offer execution")
+	}
+	if !strings.Contains(html, "clears the current naming draft") {
+		t.Error("recovery must explain which work it discards")
+	}
+	if html := renderFrontend(t, RecoveryPrompt(false)); html != "" {
+		t.Error("normal directories must not show recovery controls")
+	}
+}
+
+func TestRecoveryBlocksUndoOnlyInAffectedDirectory(t *testing.T) {
+	for _, undoDir := range []string{"", "/elsewhere"} {
+		for _, result := range []*domain.RenameResult{nil, {Success: true, Message: "No interrupted rename"}} {
+			html := renderFrontend(t, Actions(PageData{
+				RecoveryPending: true, CanUndo: true, UndoDir: undoDir, Result: result,
+			}))
+			if strings.Contains(html, `hx-post="/api/undo"`) != (undoDir != "") {
+				t.Fatalf("undo availability does not match recovery scope %q with result %+v", undoDir, result)
+			}
+		}
+	}
+}

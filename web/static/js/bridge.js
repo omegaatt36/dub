@@ -144,10 +144,10 @@
   }
 
   const draftMutations = new Set([
-    "/api/scan", "/api/select-directory", "/api/tick", "/api/tick-all",
+    "/api/scan", "/api/select-directory", "/api/drop", "/api/tick", "/api/tick-all",
     "/api/pattern", "/api/sort", "/api/hidden-files", "/api/names",
     "/api/names/upload", "/api/names/generate", "/api/names/findreplace",
-    "/api/extension-policy", "/api/refresh", "/api/preview", "/api/execute", "/api/undo",
+    "/api/extension-policy", "/api/refresh", "/api/preview", "/api/execute", "/api/undo", "/api/recover",
   ]);
   document.addEventListener("htmx:before:request", (event) => {
     const ctx = event.detail?.ctx;
@@ -527,11 +527,15 @@ window.selectDirectory = function () {
   );
 };
 
-// Called by the Go side after it applies a desktop drop: no request rendered
-// the new state, so pull it.
-window.dubRefresh = function () {
-  htmx.ajax("GET", "/api/main", {
+// Native drops must obey the same save-before-navigation rule as folder clicks.
+// Go supplies the paths because webview File objects do not expose them.
+window.dubDropFiles = async function ({ paths, target }) {
+  await window.__dubFlush();
+  const params = new URLSearchParams(paths.map((path) => ["path", path]));
+  params.set("target", target);
+  return htmx.ajax("POST", `/api/drop?${params}`, {
     target: "#main-content",
+    swap: "innerHTML",
   });
 };
 

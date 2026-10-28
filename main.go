@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"encoding/json"
 	"log/slog"
 	"net/http"
 	"os"
@@ -78,9 +79,9 @@ func main() {
 		EnableFileDrop: true,
 	})
 
-	// Wails routes the drop to Go, not to the page: a File object from the
-	// webview has no path behind it. The drop zone decides the action, the app
-	// applies it, and the page is asked to pull the result.
+	// Wails supplies native paths, but the page must save its pending manual
+	// edits before the server decides whether opening a folder discards them.
+	// Forward the drop to the page rather than changing application state here.
 	win.OnWindowEvent(events.Common.WindowFilesDropped, func(e *application.WindowEvent) {
 		files := e.Context().DroppedFiles()
 		if len(files) == 0 {
@@ -92,8 +93,7 @@ func main() {
 			target = details.Attributes[dropTargetAttribute]
 		}
 
-		dub.DropFiles(files, target)
-		win.ExecJS("window.dubRefresh()")
+		win.ExecJS(nativeDropScript(files, target))
 	})
 
 	err := desktop.Run()
@@ -101,6 +101,20 @@ func main() {
 		slog.Error("Application failed", "error", err)
 		os.Exit(1)
 	}
+}
+
+// nativeDropScript uses JSON encoding so quotes, newlines, and script-like
+// filenames remain data rather than executable JavaScript.
+func nativeDropScript(paths []string, target string) string {
+	payload, err := json.Marshal(struct {
+		Paths  []string `json:"paths"`
+		Target string   `json:"target"`
+	}{Paths: paths, Target: target})
+	if err != nil {
+		// This payload only contains strings, so Marshal cannot fail.
+		panic(err)
+	}
+	return "window.dubDropFiles(" + string(payload) + ")"
 }
 
 // newAssetHandler composes everything the webview can ask for: the embedded

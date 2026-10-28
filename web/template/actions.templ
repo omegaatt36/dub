@@ -11,7 +11,7 @@ templ Actions(data PageData) {
 			@statusSummary(data)
 		</div>
 		<div class="ml-auto flex items-center gap-2 shrink-0">
-			if data.CanUndo && len(data.Previews) == 0 {
+			if undoAvailable(data) && len(data.Previews) == 0 {
 				<button
 					type="button"
 					class="text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 px-3 py-1.5 rounded text-sm font-medium transition-colors hover:bg-gray-100 dark:hover:bg-gray-700 focus-visible:ring-2 focus-visible:ring-amber-500"
@@ -35,7 +35,11 @@ templ Actions(data PageData) {
 					Discard
 				</button>
 			}
-			if data.ConflictCount > 0 {
+			if data.RecoveryPending {
+				<span class="text-sm font-medium text-amber-700 dark:text-amber-300" aria-disabled="true">
+					Recovery required
+				</span>
+			} else if data.ConflictCount > 0 {
 				<span
 					class="bg-gray-300 dark:bg-gray-600 text-white px-4 py-1.5 rounded-md text-sm font-semibold cursor-not-allowed opacity-70 inline-flex items-center gap-2"
 					aria-disabled="true"
@@ -55,7 +59,9 @@ templ Actions(data PageData) {
 
 // statusSummary tells the user what a click would do before they click it.
 templ statusSummary(data PageData) {
-	if data.SelectedDirectory == "" {
+	if data.RecoveryPending {
+		<span class="text-amber-700 dark:text-amber-300">Recover the interrupted rename before continuing.</span>
+	} else if data.SelectedDirectory == "" {
 		<span class="text-gray-500 dark:text-gray-400 italic">Select a directory to get started.</span>
 	} else if len(data.VisibleFiles) == 0 {
 		<span class="text-gray-500 dark:text-gray-400 italic">
@@ -141,7 +147,7 @@ templ resultBanner(data PageData) {
 						}
 					</ul>
 				}
-				if data.CanUndo {
+				if undoAvailable(data) {
 					<button
 						type="button"
 						class="mt-1.5 text-xs font-semibold underline underline-offset-2 hover:no-underline focus-visible:ring-2 focus-visible:ring-emerald-500 rounded"
@@ -190,6 +196,11 @@ templ dismissButton() {
 	>
 		&times;
 	</button>
+}
+
+// undoAvailable applies the recovery scope to every Undo entry point.
+func undoAvailable(data PageData) bool {
+	return data.CanUndo && (!data.RecoveryPending || data.UndoDir != "")
 }
 
 // undoLabel says where Undo acts once the user has moved to another folder, so

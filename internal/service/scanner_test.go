@@ -160,3 +160,26 @@ func TestScannerService_SymlinkedFolders(t *testing.T) {
 	}
 	assert.ElementsMatch(t, []string{"a.txt", "a-link.txt"}, names, "a link to a file is still a file")
 }
+
+func TestScannerExcludesRecoveryNamespaceButRetainsOtherHiddenEntries(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockFS := mock.NewMockFileSystem(ctrl)
+	mockFS.EXPECT().ReadDir("/test").Return([]os.DirEntry{
+		testutil.NewMockDirEntry(".dub-rename-journal", 10),
+		testutil.NewMockDirEntry(".DUB-RENAME-staged", 20),
+		testutil.NewMockDirDirEntry(".dub-rename-internal"),
+		testutil.NewMockDirEntry(".env", 1),
+		testutil.NewMockDirDirEntry(".git"),
+	}, nil).Times(2)
+
+	scanner := NewScannerService(mockFS)
+	files, err := scanner.Scan("/test")
+	require.NoError(t, err)
+	require.Len(t, files, 1)
+	assert.Equal(t, ".env", files[0].Name)
+
+	folders, err := scanner.ListFolders("/test")
+	require.NoError(t, err)
+	require.Len(t, folders, 1)
+	assert.Equal(t, ".git", folders[0].Name)
+}

@@ -35,6 +35,9 @@ func (f FolderItem) IsHidden() bool {
 
 type RenamePreview struct {
 	DirectoryID string
+	// SourceID identifies the directory entry, without following symlinks.
+	// Keep this identity when constructing an Undo preview.
+	SourceID string
 	// Extension and Size describe the source file. A preview carries them
 	// because previews only cover ticked files, so the UI cannot recover them
 	// by indexing the (larger) visible list.

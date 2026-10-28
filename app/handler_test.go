@@ -76,60 +76,21 @@ func TestPreflightNotShortCircuited(t *testing.T) {
 // TestHandleExecuteKeepsFilter verifies the active filter survives a rename so
 // the user can keep working on the same subset for the next batch.
 func TestHandleExecuteKeepsFilter(t *testing.T) {
-	mfs := &mockFS{
-		ReadDirFunc: func(path string) ([]os.DirEntry, error) {
-			return []os.DirEntry{
-				&mockDirEntry{name: "a.txt", info: &mockFileInfo{name: "a.txt", size: 100}},
-				&mockDirEntry{name: "keep.txt", info: &mockFileInfo{name: "keep.txt", size: 100}},
-			}, nil
-		},
-		StatFunc: func(path string) (os.FileInfo, error) {
-			return nil, os.ErrNotExist
-		},
-		RenameFunc: func(old, new string) error { return nil },
-	}
-	mpm := &mockPM{
-		MatchFunc: func(pattern, stem string) (bool, error) {
-			return strings.HasPrefix(stem, "keep"), nil
-		},
-	}
-	app := NewApp(
-		mfs,
-		service.NewScannerService(mfs),
-		service.NewPatternService(mpm),
-		service.NewRenamerService(mfs),
-	)
-	handler := app.GetHandler()
-
-	form := url.Values{"path": {"/dir"}}
-	req := httptest.NewRequest("POST", "/api/scan", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	handler.ServeHTTP(httptest.NewRecorder(), req)
-	require.Len(t, app.state.AllFiles, 2)
-
-	form = url.Values{"pattern": {"keep"}}
-	req = httptest.NewRequest("POST", "/api/pattern", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	app, dir := newUXApp(t)
+	renderPost(t, app, "/api/pattern", url.Values{"pattern": {"^a"}})
 	require.Len(t, app.state.MatchedFiles, 1)
 
-	form = url.Values{"template": {"renamed_{index}"}}
-	req = httptest.NewRequest("POST", "/api/names/generate", strings.NewReader(form.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	handler.ServeHTTP(httptest.NewRecorder(), req)
+	renderPost(t, app, "/api/names/generate", url.Values{"template": {"a-renamed"}})
 	require.Len(t, app.state.Previews, 1)
 
-	req = httptest.NewRequest("POST", "/api/execute", nil)
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	rec := httptest.NewRecorder()
-	handler.ServeHTTP(rec, req)
-
-	require.Equal(t, http.StatusOK, rec.Code)
-	assert.Equal(t, "keep", app.state.Pattern, "filter should survive execution")
-	assert.Empty(t, app.state.NewNames, "names should be cleared after execute")
-	assert.Empty(t, app.state.Previews, "previews should be cleared after execute")
+	renderPost(t, app, "/api/execute", nil)
+	assert.FileExists(t, filepath.Join(dir, "a-renamed.txt"))
+	assert.NoFileExists(t, filepath.Join(dir, "a.txt"))
+	assert.Equal(t, "^a", app.state.Pattern, "filter should survive execution")
+	assert.Empty(t, app.state.NewNames, "names should be cleared after successful execution")
+	assert.Empty(t, app.state.Previews, "previews should be cleared after successful execution")
 	require.Len(t, app.state.MatchedFiles, 1)
-	assert.Equal(t, "keep.txt", app.state.MatchedFiles[0].Name, "re-scan must re-apply the filter")
+	assert.Equal(t, "a-renamed.txt", app.state.MatchedFiles[0].Name, "re-scan must re-apply the filter")
 	assert.Len(t, app.visibleFiles(), 1)
 }
 
@@ -292,6 +253,16 @@ func (m *mockPM) Match(pattern, name string) (bool, error) {
 		return m.MatchFunc(pattern, name)
 	}
 	return true, nil
+}
+
+func (m *mockPM) Compile(pattern string) (func(string) bool, error) {
+	if _, err := m.Match(pattern, ""); err != nil {
+		return nil, err
+	}
+	return func(name string) bool {
+		matched, _ := m.Match(pattern, name)
+		return matched
+	}, nil
 }
 
 func newTestApp() *App {

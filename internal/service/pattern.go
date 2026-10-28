@@ -23,17 +23,17 @@ func (s *PatternService) MatchFiles(files []domain.FileItem, pattern string) ([]
 	}
 
 	expanded := s.pm.ExpandShortcuts(pattern)
+	match, err := s.pm.Compile(expanded)
+	if err != nil {
+		return nil, err
+	}
 
 	var matched []domain.FileItem
 	for _, f := range files {
 		// Match against filename stem (without extension) so shortcuts
 		// like [alpha] don't accidentally match the extension part.
 		stem := strings.TrimSuffix(f.Name, f.Extension)
-		ok, err := s.pm.Match(expanded, stem)
-		if err != nil {
-			return nil, err
-		}
-		if ok {
+		if match(stem) {
 			matched = append(matched, f)
 		}
 	}

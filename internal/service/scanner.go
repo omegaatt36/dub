@@ -26,7 +26,7 @@ func (s *ScannerService) Scan(path string) ([]domain.FileItem, error) {
 
 	var files []domain.FileItem
 	for _, entry := range entries {
-		if s.isDir(path, entry) {
+		if domain.IsRenameInternal(entry.Name()) || s.isDir(path, entry) {
 			continue
 		}
 
@@ -59,7 +59,7 @@ func (s *ScannerService) ListFolders(path string) ([]domain.FolderItem, error) {
 
 	var folders []domain.FolderItem
 	for _, entry := range entries {
-		if !s.isDir(path, entry) {
+		if domain.IsRenameInternal(entry.Name()) || !s.isDir(path, entry) {
 			continue
 		}
 

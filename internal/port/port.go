@@ -29,7 +29,9 @@ const (
 // PatternMatcher abstracts pattern matching for testability.
 type PatternMatcher interface {
 	ExpandShortcuts(pattern string) string
-	Match(pattern, name string) (bool, error)
+	// Compile validates the pattern once and returns a matcher reusable for all
+	// filenames in a scan. The returned function must be safe for concurrent use.
+	Compile(pattern string) (func(string) bool, error)
 }
 
 // Scanner scans directories for files and folders.
@@ -52,6 +54,16 @@ type Renamer interface {
 
 type RenameDirectory interface {
 	Identity() (string, error)
+	// EntryIdentity uses directory-relative, no-follow stat.
+	EntryIdentity(name string) (string, error)
+	// CaseSensitive queries native directory capabilities without probe writes.
+	// Unknown must use conservative Unicode folding, not infer from entry aliases.
+	CaseSensitive() (sensitive, known bool)
+	// Lock serializes execution and recovery, including across processes.
+	Lock() error
+	ReadJournal() ([]byte, error)
+	CreateJournal(data []byte) error
+	RemoveJournal() error
 	ReadDir() ([]os.DirEntry, error)
 	Rename(oldName, newName string) error
 	Close() error
