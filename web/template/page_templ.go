@@ -51,6 +51,8 @@ type PageData struct {
 	SelectedPaths map[string]bool
 	TickedCount   int
 	ConflictCount int
+	// ChangedCount is how many previews actually change the filename.
+	ChangedCount int
 	// AllowExtChange reports whether renames may rewrite a file's extension.
 	AllowExtChange bool
 	// ExtChangeCount is how many previews actually change the extension, which
@@ -151,7 +153,7 @@ func MainContent(data PageData) templ.Component {
 		var templ_7745c5c3_Var3 string
 		templ_7745c5c3_Var3, templ_7745c5c3_Err = templruntime.SanitizeStyleAttributeValues(paneColumns(data.HideTree))
 		if templ_7745c5c3_Err != nil {
-			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/page.templ`, Line: 86, Col: 95}
+			return templ.Error{Err: templ_7745c5c3_Err, FileName: `web/template/page.templ`, Line: 88, Col: 95}
 		}
 		_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var3))
 		if templ_7745c5c3_Err != nil {

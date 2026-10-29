@@ -53,6 +53,16 @@ func TestNaturalSort(t *testing.T) {
 			input:    []string{"file_001", "file_01", "file_1"},
 			expected: []string{"file_1", "file_01", "file_001"},
 		},
+		{
+			name:     "numbers exceeding uint64 max",
+			input:    []string{"item_100000000000000000000", "item_99999999999999999999", "item_20000000000000000000"},
+			expected: []string{"item_20000000000000000000", "item_99999999999999999999", "item_100000000000000000000"},
+		},
+		{
+			name:     "unicode and CJK with numbers",
+			input:    []string{"檔案_10.txt", "檔案_2.txt", "檔案_1.txt"},
+			expected: []string{"檔案_1.txt", "檔案_2.txt", "檔案_10.txt"},
+		},
 	}
 
 	for _, tt := range tests {

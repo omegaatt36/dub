@@ -25,11 +25,7 @@ func FindReplace(files []FileItem, search, replace string) ([]string, error) {
 	names := make([]string, len(files))
 	for i, f := range files {
 		stem := strings.TrimSuffix(f.Name, f.Extension)
-		if re.MatchString(stem) {
-			names[i] = re.ReplaceAllString(stem, replace)
-		} else {
-			names[i] = stem
-		}
+		names[i] = re.ReplaceAllString(stem, replace)
 	}
 
 	return names, nil

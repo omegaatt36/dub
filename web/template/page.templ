@@ -42,6 +42,8 @@ type PageData struct {
 	SelectedPaths map[string]bool
 	TickedCount   int
 	ConflictCount int
+	// ChangedCount is how many previews actually change the filename.
+	ChangedCount int
 	// AllowExtChange reports whether renames may rewrite a file's extension.
 	AllowExtChange bool
 	// ExtChangeCount is how many previews actually change the extension, which

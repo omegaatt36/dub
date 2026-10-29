@@ -11,18 +11,24 @@ import (
 )
 
 func (a *App) handleSelectDirectory(w http.ResponseWriter, r *http.Request) {
-	// The operation gate orders the dialog with other navigation, but GETs
-	// continue to render the last committed snapshot while it is open.
+	// Prompt outside the operation gate so other UI actions and views remain
+	// responsive while the native OS dialog is open.
 	path, err := a.OpenDirectoryDialog()
 
 	if err != nil || path == "" {
 		// User cancelled the dialog or error — return current state unchanged
-		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+		work := a.snapshot()
+		work.readOnly = true
+		renderTempl(w, r, template.MainContent(work.buildPageData(nil)))
 		return
 	}
 
-	a.requestScan(path)
-	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
+	a.operations.Lock()
+	defer a.operations.Unlock()
+	work := a.snapshot()
+	work.requestScan(path)
+	renderTempl(w, r, template.MainContent(work.buildPageData(nil)))
+	a.publish(work)
 }
 
 func (a *App) handleScan(w http.ResponseWriter, r *http.Request) {

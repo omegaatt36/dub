@@ -85,6 +85,14 @@ func NewApp(fs port.FileSystem, scanner port.Scanner, pattern port.PatternFilter
 // GetHandler returns the HTTP handler for the HTMX API.
 func (a *App) GetHandler() http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/select-directory" {
+			a.handleSelectDirectory(w, r)
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/api/scan/cancel" {
+			a.handleScanCancelFast(w, r)
+			return
+		}
 		mutation := r.Method != http.MethodGet && r.Method != http.MethodHead
 		if mutation {
 			a.operations.Lock()

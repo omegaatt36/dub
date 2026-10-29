@@ -95,6 +95,16 @@ func (a *App) handleScanCancel(w http.ResponseWriter, r *http.Request) {
 	renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 }
 
+// handleScanCancelFast clears PendingDir without queuing behind a slow scan.
+func (a *App) handleScanCancelFast(w http.ResponseWriter, r *http.Request) {
+	a.mu.Lock()
+	a.state.PendingDir = ""
+	a.mu.Unlock()
+	work := a.snapshot()
+	work.readOnly = true
+	renderTempl(w, r, template.MainContent(work.buildPageData(nil)))
+}
+
 // requestScan opens path unless that would throw away names the user typed by
 // hand: those exist nowhere else, while a template or a search rule can be
 // re-applied. In that case the request is parked in PendingDir and the page asks

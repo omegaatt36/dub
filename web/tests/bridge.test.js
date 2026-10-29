@@ -69,16 +69,16 @@ test('pending manual edits survive a full swap by file path',()=>{
 
 test('selection waits for pending manual save before excluding the edited row',async()=>{
  let finishSave; const calls=[];
- const app=bridge({ajax(method,url){calls.push(url);return new Promise(resolve=>{finishSave=resolve;});}});
+ const app=bridge({ajax(method,url,options){calls.push({url,values:options?.values});return new Promise(resolve=>{finishSave=resolve;});}});
  const form={isConnected:true,dataset:{},values:[['name_0','draft']],matches(){return true;},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
  app.emit('input',{target:{dataset:{},closest(){return form;}}});
- const ctx={request:{action:'/api/tick',method:'POST'},target:{id:'main-content'},fetch:async()=>{calls.push('selection');return {};}};
+ const ctx={request:{action:'/api/tick',method:'POST'},target:{id:'main-content'},fetch:async()=>{calls.push({url:'selection'});return {};}};
  app.emit('htmx:before:request',{detail:{ctx}});
  const request=ctx.fetch('/api/tick',ctx.request);
  await Promise.resolve();
- assert.equal(calls.length,1); assert.match(calls[0],/^\/api\/names\?/);
+ assert.equal(calls.length,1); assert.equal(calls[0].url,'/api/names'); assert.equal(calls[0].values.name_0,'draft');
  finishSave(); await request;
- assert.equal(calls[1],'selection');
+ assert.equal(calls[1].url,'selection');
 });
 
 
@@ -100,9 +100,9 @@ test('sort waits for an autosave already in flight and resolves its replacement 
 
 test('flush serializes saves before queue-first admission and waits for the latest edit',async()=>{
  const issued=[]; let release; let active=false;
- const app=bridge({ajax(method,url){
+ const app=bridge({ajax(method,url,options){
   if(active) return Promise.resolve();
-  active=true; issued.push(url);
+  active=true; issued.push({url,values:options?.values});
   return new Promise(resolve=>{release=()=>{active=false;resolve();};});
  }});
  const form={isConnected:true,dataset:{},values:[['name_0','first']],matches(){return true;},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
@@ -117,7 +117,7 @@ test('flush serializes saves before queue-first admission and waits for the late
  assert.equal(issued.length,1);
  release();
  for(let i=0;i<8;i++) await Promise.resolve();
- assert.equal(issued.length,2); assert.match(issued[1],/name_0=latest/);
+ assert.equal(issued.length,2); assert.equal(issued[1].values.name_0,'latest');
  assert.equal(finished,false);
  release(); await Promise.all([firstFlush,secondFlush,latestFlush]);
  assert.equal(finished,true);
@@ -125,7 +125,7 @@ test('flush serializes saves before queue-first admission and waits for the late
 
 test('tree-only swap keeps the unchanged manual form pending',async()=>{
  const calls=[];
- const app=bridge({ajax(method,url){calls.push(url);return Promise.resolve();}});
+ const app=bridge({ajax(method,url,options){calls.push({url,values:options?.values});return Promise.resolve();}});
  const input={dataset:{filePath:'/a'},value:'draft',closest(){return form;}};
  const form={isConnected:true,dataset:{},values:[['name_0','draft']],matches(){return true;},querySelectorAll(){return [input];},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
  app.emit('input',{target:input});
@@ -133,7 +133,7 @@ test('tree-only swap keeps the unchanged manual form pending',async()=>{
  app.document.querySelectorAll=selector=>selector==='input[data-file-path]'?[input]:[];
  app.emit('htmx:after:settle');
  await app.window.__dubFlush();
- assert.equal(calls.length,1); assert.match(calls[0],/name_0=draft/);
+ assert.equal(calls.length,1); assert.equal(calls[0].values.name_0,'draft');
 });
 
 test('manual save has a stable source independent from a waiting main-content mutation',async()=>{
@@ -150,18 +150,42 @@ test('manual save has a stable source independent from a waiting main-content mu
 test('native drop waits for pending manual save before posting paths and target',async()=>{
  const calls=[]; let finishSave;
  const app=bridge({ajax(method,url,options){
-  calls.push({method,url,target:options.target});
-  if(url.startsWith('/api/names?')) return new Promise(resolve=>{finishSave=resolve;});
+  calls.push({method,url,target:options.target,values:options.values});
+  if(url==='/api/names') return new Promise(resolve=>{finishSave=resolve;});
   return Promise.resolve();
  }});
  const form={isConnected:true,dataset:{},values:[['name_0','draft']],matches(){return true;},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
  app.emit('input',{target:{dataset:{},closest(){return form;}}});
  const drop=app.window.dubDropFiles({paths:['/a & b','/second'],target:'scan'});
  await Promise.resolve();
- assert.equal(calls.length,1); assert.match(calls[0].url,/^\/api\/names\?/);
+ assert.equal(calls.length,1); assert.equal(calls[0].url,'/api/names'); assert.equal(calls[0].values.name_0,'draft');
  finishSave(); await drop;
  assert.equal(calls.length,2);
  assert.equal(calls[1].method,'POST');
  assert.equal(calls[1].url,'/api/drop?path=%2Fa+%26+b&path=%2Fsecond&target=scan');
  assert.equal(calls[1].target,'#main-content');
+});
+
+test('failed manual save keeps form in pendingSaves and surfaces transport error',async()=>{
+ const errors=[];
+ const app=bridge({ajax(){return Promise.reject(new Error('IPC down'));}});
+ app.window.__dubShowError=msg=>errors.push(msg);
+ const form={isConnected:true,dataset:{},values:[['name_0','draft']],matches(){return true;},getAttribute(name){return name==='hx-post'?'/api/names':name==='hx-vals'?'{}':null;}};
+ app.emit('input',{target:{dataset:{},closest(){return form;}}});
+ let rejected=false;
+ try { await app.window.__dubFlush(); } catch { rejected=true; }
+ assert.equal(rejected,true);
+ assert.equal(errors.length,1);
+ assert.match(errors[0],/IPC down/);
+});
+
+test('htmx response error surfaces non-silent failures and ignores silent refresh',()=>{
+ const errors=[];
+ const app=bridge();
+ app.window.__dubShowError=msg=>errors.push(msg);
+ app.emit('htmx:response:error',{detail:{ctx:{request:{action:'/api/refresh?silent=true'},response:{status:500}}}});
+ assert.equal(errors.length,0);
+ app.emit('htmx:response:error',{detail:{ctx:{request:{action:'/api/execute'},response:{status:503}}}});
+ assert.equal(errors.length,1);
+ assert.match(errors[0],/HTTP 503/);
 });

@@ -125,15 +125,22 @@
         clearTimeout(timers.get(form));
         timers.delete(form);
 
-        const params = new URLSearchParams(new FormData(form));
+        const values = Object.fromEntries(new FormData(form));
         for (const [key, value] of Object.entries(JSON.parse(form.getAttribute("hx-vals") || "{}"))) {
-          params.set(key, value);
+          values[key] = value;
         }
-        await htmx.ajax("POST", `${form.getAttribute("hx-post")}?${params}`, {
-          source: "#manual-save-source",
-          target: "#main-content",
-          swap: "innerHTML",
-        });
+        try {
+          await htmx.ajax("POST", form.getAttribute("hx-post"), {
+            source: "#manual-save-source",
+            target: "#main-content",
+            swap: "innerHTML",
+            values,
+          });
+        } catch (error) {
+          if (form.isConnected) pendingSaves.add(form);
+          showTransportError("Failed to save manual names: " + (error?.message || error));
+          throw error;
+        }
       }
     };
     manualSaveDrain = drain().then(
@@ -152,8 +159,8 @@
   document.addEventListener("htmx:before:request", (event) => {
     const ctx = event.detail?.ctx;
     if (!ctx) return;
+    if (ctx.sourceElement?.id === "manual-save-source") return;
     const path = ctx.request.action.split("?")[0];
-    if (path === "/api/names" && ctx.request.action.includes("?")) return;
     if (!draftMutations.has(path)) return;
     if (!manualSaveDrain && ![...pendingSaves].some((form) => form.isConnected)) return;
 
@@ -364,6 +371,26 @@
     delete document.body.dataset.busy;
   });
 
+  // --- Transport & Response Error Handling ---
+
+  function showTransportError(message) {
+    window.__dubShowError?.(message);
+  }
+
+  document.addEventListener("htmx:response:error", (event) => {
+    const ctx = event.detail?.ctx;
+    if (ctx?.request?.action?.includes("silent=true")) return;
+    const status = ctx?.response?.status || "unknown";
+    showTransportError(`Request failed (HTTP ${status})`);
+  });
+
+  document.addEventListener("htmx:error", (event) => {
+    const ctx = event.detail?.ctx;
+    if (ctx?.request?.action?.includes("silent=true")) return;
+    const err = event.detail?.error;
+    showTransportError(`Request failed: ${err?.message || err || "network error"}`);
+  });
+
   // --- Refresh when the window is used again ---
   // Files change outside the app while it sits in the background. The silent
   // form answers 204 (no swap) when nothing changed.
@@ -502,6 +529,32 @@ window.__dubFlush = function () {
   return window.__dubFlushImpl ? window.__dubFlushImpl() : Promise.resolve();
 };
 
+window.__dubShowError = function (message) {
+  if (!document?.createElement || !document?.body?.append) return;
+  document.getElementById("error-banner")?.remove();
+  const banner = document.createElement("div");
+  banner.id = "error-banner";
+  banner.className = "fixed top-4 right-4 bg-red-50 dark:bg-red-900 border border-red-200 dark:border-red-700 text-red-800 dark:text-red-100 px-4 py-3 rounded-lg shadow-lg max-w-md z-50";
+  banner.setAttribute("role", "alert");
+
+  const row = document.createElement("div");
+  row.className = "flex items-start gap-2";
+
+  const text = document.createElement("span");
+  text.className = "flex-1 text-sm";
+  text.textContent = message;
+
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = "text-red-600 dark:text-red-300 hover:text-red-800 dark:hover:text-red-100 font-bold";
+  close.textContent = "×";
+  close.onclick = () => banner.remove();
+
+  row.append(text, close);
+  banner.append(row);
+  document.body.append(banner);
+};
+
 // Toggles the two-step confirm for the rename. Both halves are rendered by the
 // server; this only flips which one is visible, so the destructive button is
 // never the initial state. Focus follows the visible half: the button that held
@@ -520,23 +573,31 @@ window.__dubConfirm = function (show) {
 // The Go side owns the native folder picker, so the shortcut just posts to the
 // same endpoint the Open button uses and takes the rendered result.
 window.selectDirectory = function () {
-  window.__dubFlush().then(() =>
-    htmx.ajax("POST", "/api/select-directory", {
-      target: "#main-content",
-    }),
-  );
+  return window.__dubFlush()
+    .then(() =>
+      htmx.ajax("POST", "/api/select-directory", {
+        target: "#main-content",
+      }),
+    )
+    .catch((error) => {
+      window.__dubShowError?.("Failed to select directory: " + (error?.message || error));
+    });
 };
 
 // Native drops must obey the same save-before-navigation rule as folder clicks.
 // Go supplies the paths because webview File objects do not expose them.
 window.dubDropFiles = async function ({ paths, target }) {
-  await window.__dubFlush();
-  const params = new URLSearchParams(paths.map((path) => ["path", path]));
-  params.set("target", target);
-  return htmx.ajax("POST", `/api/drop?${params}`, {
-    target: "#main-content",
-    swap: "innerHTML",
-  });
+  try {
+    await window.__dubFlush();
+    const params = new URLSearchParams(paths.map((path) => ["path", path]));
+    params.set("target", target);
+    return await htmx.ajax("POST", `/api/drop?${params}`, {
+      target: "#main-content",
+      swap: "innerHTML",
+    });
+  } catch (error) {
+    window.__dubShowError?.("Failed to process dropped files: " + (error?.message || error));
+  }
 };
 
 window.appendShortcut = function (shortcut) {

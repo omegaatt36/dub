@@ -95,10 +95,13 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 			}
 		}
 	}
-	counts, selected, occupied := map[string]int{}, map[string]bool{}, map[string]bool{}
+	counts, selected, occupied, ownedIDs := map[string]int{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 	for _, p := range previews {
 		counts[nameKey(p.NewName, sensitive)]++
 		selected[nameKey(p.OriginalName, sensitive)] = true
+		if p.SourceID != "" {
+			ownedIDs[p.SourceID] = true
+		}
 	}
 	for _, e := range entries {
 		occupied[nameKey(e.Name(), sensitive)] = true
@@ -109,11 +112,7 @@ func (s *RenamerService) PreviewRename(files []domain.FileItem, newNames []strin
 		if directory != nil {
 			id, lookupErr := directory.EntryIdentity(p.NewName)
 			if lookupErr == nil {
-				owned := false
-				for _, source := range previews {
-					owned = owned || source.SourceID == id
-				}
-				previews[i].Conflict = previews[i].Conflict || !owned
+				previews[i].Conflict = previews[i].Conflict || !ownedIDs[id]
 			} else if !os.IsNotExist(lookupErr) {
 				return nil, lookupErr
 			}

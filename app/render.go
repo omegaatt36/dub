@@ -43,6 +43,7 @@ func (a *App) buildPageData(result *domain.RenameResult) template.PageData {
 		ShowHiddenFiles: a.state.ShowHiddenFiles, SortOrder: a.state.Sort.String(),
 		TickedCount:   a.state.TickCount(visible),
 		ConflictCount: countConflicts(a.state.Previews),
+		ChangedCount:  countChangedPreviews(a.state.Previews),
 		Pattern:       a.state.Pattern, PatternError: a.state.PatternError,
 		NewNames: a.state.NewNames, Previews: a.state.Previews,
 		AllowExtChange: a.state.ExtensionPolicy == port.UseProposedExtension,
@@ -69,6 +70,16 @@ func countConflicts(previews []domain.RenamePreview) int {
 	n := 0
 	for _, p := range previews {
 		if p.Conflict {
+			n++
+		}
+	}
+	return n
+}
+
+func countChangedPreviews(previews []domain.RenamePreview) int {
+	n := 0
+	for _, p := range previews {
+		if p.OriginalName != p.NewName {
 			n++
 		}
 	}

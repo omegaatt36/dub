@@ -14,14 +14,16 @@
         </script>
         <link rel="stylesheet" href="/static/css/app.css" />
         <script src="/static/js/htmx.min.js"></script>
-        <!-- Wails v3 runtime. Not optional: it is what turns a desktop drop
-             into the Go-side event, and it has to load before a drop happens. -->
         <script type="module" src="/wails/runtime.js"></script>
         <script src="/static/js/bridge.js"></script>
     </head>
     <body class="bg-gray-50 text-gray-900 dark:bg-gray-900 dark:text-gray-100 min-h-screen">
         <div id="manual-save-source" hidden aria-hidden="true"></div>
         <div id="busy-bar" aria-hidden="true"></div>
-        <div id="app" class="h-screen" hx-get="/api/page" hx-trigger="load" hx-swap="innerHTML"></div>
+        <div id="app" class="h-screen" hx-get="/api/page" hx-trigger="load" hx-swap="innerHTML">
+            <div class="h-full flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
+                Loading Dub…
+            </div>
+        </div>
     </body>
 </html>

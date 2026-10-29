@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"unicode"
+	"unicode/utf8"
 )
 
 // SortField is the file attribute a list is ordered by.
@@ -81,48 +82,57 @@ func SortFolders(folders []FolderItem) {
 }
 
 func naturalCompare(a, b string) int {
-	aLower := strings.ToLower(a)
-	bLower := strings.ToLower(b)
-
 	ai, bi := 0, 0
-	for ai < len(aLower) && bi < len(bLower) {
-		aIsDigit := unicode.IsDigit(rune(aLower[ai]))
-		bIsDigit := unicode.IsDigit(rune(bLower[bi]))
+	for ai < len(a) && bi < len(b) {
+		aIsDigit := isASCIIDigit(a[ai])
+		bIsDigit := isASCIIDigit(b[bi])
 
 		switch {
 		case aIsDigit && bIsDigit:
-			// Extract numeric sequences and compare as numbers
-			aNum, aEnd := extractNumber(aLower, ai)
-			bNum, bEnd := extractNumber(bLower, bi)
+			aDigits, aEnd := extractDigits(a, ai)
+			bDigits, bEnd := extractDigits(b, bi)
 
-			if c := cmp.Compare(aNum, bNum); c != 0 {
-				return c
-			}
-			// Same numeric value: shorter string of digits first (e.g., "01" < "001")
-			aLen := aEnd - ai
-			bLen := bEnd - bi
-			if c := cmp.Compare(aLen, bLen); c != 0 {
+			if c := compareNumericDigits(aDigits, bDigits); c != 0 {
 				return c
 			}
 			ai = aEnd
 			bi = bEnd
 		default:
-			if aLower[ai] != bLower[bi] {
-				return cmp.Compare(aLower[ai], bLower[bi])
+			ar, aSize := utf8.DecodeRuneInString(a[ai:])
+			br, bSize := utf8.DecodeRuneInString(b[bi:])
+			al := unicode.ToLower(ar)
+			bl := unicode.ToLower(br)
+			if al != bl {
+				return cmp.Compare(al, bl)
 			}
-			ai++
-			bi++
+			ai += aSize
+			bi += bSize
 		}
 	}
-	return cmp.Compare(len(aLower), len(bLower))
+	return cmp.Compare(len(a)-ai, len(b)-bi)
 }
 
-func extractNumber(s string, start int) (uint64, int) {
-	var num uint64
+func isASCIIDigit(b byte) bool {
+	return b >= '0' && b <= '9'
+}
+
+func extractDigits(s string, start int) (string, int) {
 	i := start
-	for i < len(s) && unicode.IsDigit(rune(s[i])) {
-		num = num*10 + uint64(s[i]-'0')
+	for i < len(s) && isASCIIDigit(s[i]) {
 		i++
 	}
-	return num, i
+	return s[start:i], i
+}
+
+func compareNumericDigits(a, b string) int {
+	aTrim := strings.TrimLeft(a, "0")
+	bTrim := strings.TrimLeft(b, "0")
+	if c := cmp.Compare(len(aTrim), len(bTrim)); c != 0 {
+		return c
+	}
+	if c := cmp.Compare(aTrim, bTrim); c != 0 {
+		return c
+	}
+	// Same numeric value: shorter string of digits first (e.g., "01" < "001")
+	return cmp.Compare(len(a), len(b))
 }
