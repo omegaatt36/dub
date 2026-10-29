@@ -2,6 +2,7 @@ version: '3'
 
 vars:
   HTMX_VERSION: 4.0.0
+  HTMX_SHA256: e484d9171a9db30a39c8f16e3d709d4137f3211c659f8e6125816635033d593f
   TAILWIND_VERSION: v4.2.1
   SED_INPLACE:
     sh: "if sed --version >/dev/null 2>&1; then echo \"sed -i\"; else echo \"sed -i ''\"; fi"
@@ -65,9 +66,12 @@ tasks:
         chmod +x tailwindcss
 
   htmx:
-    summary: Vendor htmx.min.js (pinned version)
+    summary: Vendor htmx.min.js (pinned version and SHA-256)
+    status:
+      - printf '%s  web/static/js/htmx.min.js\n' "{{.HTMX_SHA256}}" | shasum -a 256 -c - >/dev/null 2>&1
     cmds:
       - curl -fsSL https://unpkg.com/htmx.org@{{.HTMX_VERSION}}/dist/htmx.min.js -o web/static/js/htmx.min.js
+      - printf '%s  web/static/js/htmx.min.js\n' "{{.HTMX_SHA256}}" | shasum -a 256 -c -
 
   generate:icons:
     summary: Generate the macOS .icns from build/appicon.png

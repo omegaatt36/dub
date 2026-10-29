@@ -259,3 +259,16 @@ func TestCompoundAndUppercaseExtensionsSurviveRename(t *testing.T) {
 	assert.Equal(t, "yyy.gz", a.state.Previews[0].NewName)
 	assert.Equal(t, 1, countExtensionChanges(a.state.Previews))
 }
+
+func TestNoOpPreviewsDoNotOfferExecuteOrReportAllTickedAsChanged(t *testing.T) {
+	a, _ := newUXApp(t)
+	body := renderPost(t, a, "/api/names/findreplace", url.Values{"search": {"^a$"}, "replace": {"alpha"}})
+
+	assert.Contains(t, body, "Ready to rename")
+	assert.Contains(t, body, `>1</span> file`)
+	assert.Contains(t, body, `id="execute-btn"`)
+
+	body = renderPost(t, a, "/api/names/findreplace", url.Values{"search": {"^nomatch$"}, "replace": {"alpha"}})
+	assert.Contains(t, body, "No filenames would change")
+	assert.NotContains(t, body, `id="execute-btn"`)
+}

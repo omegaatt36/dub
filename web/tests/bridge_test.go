@@ -25,8 +25,8 @@ func TestBridge(t *testing.T) {
 	if err := json.Unmarshal([]byte(namesJSON), &names); err != nil {
 		t.Fatal(err)
 	}
-	if len(names) != 11 {
-		t.Fatalf("expected 11 bridge regressions, got %d", len(names))
+	if len(names) != 13 {
+		t.Fatalf("expected 13 bridge regressions, got %d", len(names))
 	}
 	for index, name := range names {
 		t.Run(name, func(t *testing.T) {

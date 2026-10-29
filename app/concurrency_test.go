@@ -240,3 +240,55 @@ func TestConcurrentViewsAndMutations(t *testing.T) {
 	wg.Wait()
 	require.Len(t, a.snapshot().state.Selected, 2)
 }
+
+func TestDirectoryDialogDoesNotBlockMutationsWhileOpen(t *testing.T) {
+	a := newTestApp()
+	a.state.SelectedDirectory = "/old"
+	a.state.AllFiles = []domain.FileItem{{Name: "old.txt", Path: "/old/old.txt"}}
+	a.state.MatchedFiles = a.state.AllFiles
+	a.state.Selected["/old/old.txt"] = true
+
+	dialogOpen, releaseDialog := make(chan struct{}), make(chan struct{})
+	a.pickDirectory = func() (string, error) {
+		close(dialogOpen)
+		<-releaseDialog
+		return "", nil
+	}
+
+	handler := a.GetHandler()
+	dialogDone := requestAsync(handler, "POST", "/api/select-directory", nil)
+	<-dialogOpen
+
+	// While the native dialog is open, mutations and cancel must still proceed.
+	awaitResponse(t, requestAsync(handler, "POST", "/api/hidden-files", url.Values{"show": {"true"}}))
+	assert.True(t, a.snapshot().state.ShowHiddenFiles)
+
+	close(releaseDialog)
+	awaitResponse(t, dialogDone)
+}
+
+func TestScanCancelDoesNotWaitForSlowOperation(t *testing.T) {
+	a := newTestApp()
+	a.state.SelectedDirectory = "/old"
+	a.state.PendingDir = "/pending"
+	a.state.NamesTyped = true
+	a.state.NewNames = []string{"draft"}
+
+	started, release := make(chan struct{}), make(chan struct{})
+	a.scanner = &blockingScanner{Scanner: a.scanner, list: func(string) ([]domain.FolderItem, error) {
+		close(started)
+		<-release
+		return nil, nil
+	}}
+
+	handler := a.GetHandler()
+	toggleDone := requestAsync(handler, "POST", "/api/tree/toggle", url.Values{"path": {"/slow"}})
+	<-started
+
+	cancelRec := awaitResponse(t, requestAsync(handler, "POST", "/api/scan/cancel", nil))
+	assert.Equal(t, http.StatusOK, cancelRec.Code)
+	assert.Empty(t, a.snapshot().state.PendingDir)
+
+	close(release)
+	awaitResponse(t, toggleDone)
+}

@@ -11,7 +11,7 @@ import (
 )
 
 func (a *App) handleExecute(w http.ResponseWriter, r *http.Request) {
-	if len(a.state.Previews) == 0 {
+	if countChangedPreviews(a.state.Previews) == 0 {
 		a.state.Error = "No previews to execute"
 		renderTempl(w, r, template.MainContent(a.buildPageData(nil)))
 		return
