@@ -78,7 +78,7 @@ jobs:
         working-directory: web/tests/browser
       - run: npm test
         working-directory: web/tests/browser
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: browser-results
